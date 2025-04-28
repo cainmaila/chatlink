@@ -17,8 +17,6 @@
 	let isModelValid = $state(true)
 	let showRoleplaySettings = $state(false)
 
-	$inspect(messages)
-
 	// --- Services ---
 	let ollamaService = $state(new OllamaService())
 	let roleplayService = $state(new RoleplayService())
