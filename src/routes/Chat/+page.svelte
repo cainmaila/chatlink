@@ -17,6 +17,8 @@
 	let isModelValid = $state(true)
 	let showRoleplaySettings = $state(false)
 
+	$inspect(messages)
+
 	// --- Services ---
 	let ollamaService = $state(new OllamaService())
 	let roleplayService = $state(new RoleplayService())
@@ -32,33 +34,30 @@
 	let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
 	let previousSystemPrompt = $state('')
 
-	// 當 fullSystemPrompt 變化時自動更新消息中的系統提示詞，避免無限循環
+	// 當 roleplaySettings 變化時，確保重新生成 system 提示詞
 	$effect(() => {
-		// 只有當系統提示詞實際變化時才進行更新，避免無限循環
-		if (
-			fullSystemPrompt !== previousSystemPrompt &&
-			roleplaySettings.isRoleplayMode &&
-			fullSystemPrompt
-		) {
-			// 更新先前的系統提示詞
-			previousSystemPrompt = fullSystemPrompt
+		// 當角色設定發生變化時，强制重新生成系統提示詞
+		if (roleplaySettings.isRoleplayMode) {
+			// 直接從 roleplayService 獲取最新的系統提示詞
+			const newSystemPrompt = roleplayService.generateSystemPrompt()
 
-			// 檢查是否有舊的系統提示詞
-			const hasSystemMessage = messages.some((msg) => msg.role === 'system')
+			// 只有當系統提示詞實際變化時才進行更新
+			if (newSystemPrompt !== previousSystemPrompt) {
+				previousSystemPrompt = newSystemPrompt
 
-			if (hasSystemMessage) {
-				// 使用淺拷貝避免觸發多餘的反應性更新
-				const updatedMessages = messages.map((msg) =>
-					msg.role === 'system' ? { ...msg, content: fullSystemPrompt } : msg
-				)
-				// 一次性更新 messages
-				messages = updatedMessages
-			} else if (messages.length > 0) {
-				// 一次性添加系統提示詞
-				messages = [{ role: 'system', content: fullSystemPrompt }, ...messages]
+				// 更新 UI 顯示的消息列表中的系統提示詞
+				updateSystemPromptInMessages(newSystemPrompt)
 			}
 		}
 	})
+
+	// 輔助函數：更新消息列表中的系統提示詞
+	function updateSystemPromptInMessages(systemPrompt: string) {
+		if (!systemPrompt || !roleplaySettings.isRoleplayMode) return
+		// 將新陣列設定為 messages
+		messages = [{ role: 'system', content: systemPrompt }]
+		console.log('系統提示詞已更新:', systemPrompt)
+	}
 
 	// 注意：不再使用 $derived 創建 LLM，因為在發送消息時會直接創建最新的實例
 
@@ -129,7 +128,7 @@
 			if (!confirm('切換角色模板將清除所有現有對話歷史，確定要繼續嗎？')) {
 				return
 			}
-			clearMessages()
+			// clearMessages()
 		}
 
 		const newSettings = roleplayService.applyTemplate(template)
@@ -151,13 +150,6 @@
 
 	// 開始新的角色扮演對話
 	function startRoleplay() {
-		// 如果已經有對話歷史，先提示用戶
-		if (messages.length > 0) {
-			if (!confirm('切換角色將清除所有現有對話歷史，確定要繼續嗎？')) {
-				return
-			}
-		}
-
 		roleplaySettings.isRoleplayMode = true
 		roleplayService.saveSettings(roleplaySettings)
 
@@ -166,10 +158,6 @@
 		ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
 
 		clearMessages()
-
-		if (fullSystemPrompt) {
-			messages = [{ role: 'system', content: fullSystemPrompt }]
-		}
 
 		const welcomeMessage = roleplayService.generateWelcomeMessage()
 		if (welcomeMessage) {
