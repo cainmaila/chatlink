@@ -1,11 +1,25 @@
+/**
+ * @file RoleplayService.ts
+ * @description 提供角色扮演功能的服務類，管理角色設定、模板應用和系統提示詞生成
+ */
+
 import type { RoleplaySettings, ChatMessage } from '../types'
 
-// 角色扮演設定的 localStorage key
+/** 角色扮演設定在 localStorage 中的鍵名 */
 export const ROLEPLAY_SETTINGS_KEY = 'roleplay_settings'
 
+/**
+ * 角色扮演服務類
+ * 管理角色扮演相關的設定、模板和系統提示詞生成
+ */
 export class RoleplayService {
+	/** 角色扮演設定對象 */
 	private settings: RoleplaySettings
 
+	/**
+	 * 創建 RoleplayService 實例
+	 * 初始化預設設定並嘗試從 localStorage 載入已保存的設定
+	 */
 	constructor() {
 		// 設定默認值
 		this.settings = {
@@ -20,7 +34,10 @@ export class RoleplayService {
 		this.loadSettings()
 	}
 
-	// 從 localStorage 載入設定
+	/**
+	 * 從 localStorage 載入角色扮演設定
+	 * @returns {RoleplaySettings} 載入的角色扮演設定
+	 */
 	loadSettings(): RoleplaySettings {
 		const storedSettings = localStorage.getItem(ROLEPLAY_SETTINGS_KEY)
 
@@ -44,18 +61,28 @@ export class RoleplayService {
 		return this.settings
 	}
 
-	// 儲存設定到 localStorage
+	/**
+	 * 儲存角色扮演設定到 localStorage
+	 * @param {RoleplaySettings} settings - 要保存的角色扮演設定
+	 */
 	saveSettings(settings: RoleplaySettings) {
 		this.settings = settings
 		localStorage.setItem(ROLEPLAY_SETTINGS_KEY, JSON.stringify(settings))
 	}
 
-	// 獲取當前設定
+	/**
+	 * 獲取當前角色扮演設定的副本
+	 * @returns {RoleplaySettings} 當前角色扮演設定的副本
+	 */
 	getSettings(): RoleplaySettings {
 		return { ...this.settings }
 	}
 
-	// 套用預設角色模板
+	/**
+	 * 套用預設角色扮演模板
+	 * @param {string} template - 模板名稱 ('fantasy-adventure' | 'sci-fi' | 'detective' | 'historical')
+	 * @returns {RoleplaySettings} 套用模板後的角色扮演設定
+	 */
 	applyTemplate(template: string): RoleplaySettings {
 		switch (template) {
 			case 'fantasy-adventure':
@@ -106,7 +133,11 @@ export class RoleplayService {
 		return this.settings
 	}
 
-	// 生成系統提示詞
+	/**
+	 * 根據當前角色扮演設定生成系統提示詞
+	 * 將各設定項組合成一個完整的系統提示指令
+	 * @returns {string} 生成的系統提示詞
+	 */
 	generateSystemPrompt(): string {
 		if (!this.settings.isRoleplayMode) return ''
 
@@ -138,7 +169,11 @@ export class RoleplayService {
 		return prompt
 	}
 
-	// 生成歡迎訊息
+	/**
+	 * 生成角色扮演的歡迎訊息
+	 * 當開始角色扮演時顯示角色已進入對話的提示
+	 * @returns {ChatMessage | null} 歡迎訊息，若非角色扮演模式則返回 null
+	 */
 	generateWelcomeMessage(): ChatMessage | null {
 		if (!this.settings.isRoleplayMode) return null
 
