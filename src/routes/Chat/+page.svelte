@@ -7,7 +7,6 @@
 	import InputArea from '$lib/components/InputArea.svelte'
 	import ModelSettings from '$lib/components/ModelSettings.svelte'
 	import RoleplaySettings from '$lib/components/RoleplaySettings.svelte'
-	import { SystemMessage } from '@langchain/core/messages'
 
 	// --- State ---
 	let messages = $state<ChatMessage[]>([])
@@ -24,10 +23,10 @@
 
 	// --- Derived State ---
 	// 載入設定
-	let modelSettings = $state(ollamaService.loadSettings())
-	let roleplaySettings = $state(roleplayService.loadSettings())
-	let selectedModel = $state(modelSettings.model)
-	let ollamaBaseUrl = $state(modelSettings.baseUrl)
+	let modelSettings = $derived(ollamaService.loadSettings())
+	let roleplaySettings = $derived(roleplayService.loadSettings())
+	let selectedModel = $derived(modelSettings.model)
+	let ollamaBaseUrl = $derived(modelSettings.baseUrl)
 
 	// 生成系統提示詞
 	let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
@@ -97,8 +96,21 @@
 
 	// 套用角色模板
 	function applyTemplate(template: string) {
+		// 如果已經在角色扮演模式且有對話歷史，提示用戶
+		if (roleplaySettings.isRoleplayMode && messages.length > 0) {
+			if (!confirm('切換角色模板將清除所有現有對話歷史，確定要繼續嗎？')) {
+				return
+			}
+			clearMessages()
+		}
+
 		const newSettings = roleplayService.applyTemplate(template)
 		roleplaySettings = newSettings
+
+		// 如果已經在角色扮演模式，自動重新開始對話
+		if (roleplaySettings.isRoleplayMode) {
+			startRoleplay()
+		}
 	}
 
 	// 清除對話歷史
@@ -111,8 +123,19 @@
 
 	// 開始新的角色扮演對話
 	function startRoleplay() {
+		// 如果已經有對話歷史，先提示用戶
+		if (messages.length > 0) {
+			if (!confirm('切換角色將清除所有現有對話歷史，確定要繼續嗎？')) {
+				return
+			}
+		}
+
 		roleplaySettings.isRoleplayMode = true
 		roleplayService.saveSettings(roleplaySettings)
+
+		// 重新初始化 OllamaService 以確保不會保留舊的對話上下文
+		// 使用當前設定的 URL 和模型名稱，溫度使用默認值
+		ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
 
 		clearMessages()
 
@@ -130,6 +153,13 @@
 
 	// 關閉角色扮演
 	function closeRoleplay() {
+		// 提示用戶確認是否關閉角色扮演
+		if (messages.length > 0) {
+			if (!confirm('關閉角色扮演將清除所有現有對話歷史，確定要繼續嗎？')) {
+				return
+			}
+		}
+
 		roleplaySettings.isRoleplayMode = false
 		roleplayService.saveSettings(roleplaySettings)
 		clearMessages()
@@ -151,20 +181,28 @@
 		let aiMessageIndex = -1
 
 		try {
-			const history = ollamaService.convertMessages(messages)
+			// 深度複製消息以避免影響原始數組
+			let historyMessages = JSON.parse(JSON.stringify(messages))
 
-			if (
-				roleplaySettings.isRoleplayMode &&
-				fullSystemPrompt &&
-				!messages.some((m: ChatMessage) => m.role === 'system')
-			) {
-				history.unshift(new SystemMessage(fullSystemPrompt))
+			// 在角色扮演模式下，確保使用最新的系統提示詞
+			if (roleplaySettings.isRoleplayMode && fullSystemPrompt) {
+				// 移除現有的系統提示詞（如果有）
+				historyMessages = historyMessages.filter((msg: ChatMessage) => msg.role !== 'system')
+				// 將最新的系統提示詞添加到歷史記錄的開頭
+				historyMessages.unshift({ role: 'system', content: fullSystemPrompt })
 			}
+
+			// 確保 LLM 實例是最新的
+			const currentLLM = ollamaService.createLLM()
 
 			messages = [...messages, { role: 'ai', content: '' }]
 			aiMessageIndex = messages.length - 1
 
-			const stream = await llm.stream(history)
+			// 轉換消息為 LangChain 格式
+			const history = ollamaService.convertMessages(historyMessages)
+
+			// 使用最新創建的 LLM 實例
+			const stream = await currentLLM.stream(history)
 
 			for await (const chunk of stream) {
 				if (chunk.content && typeof chunk.content === 'string') {
@@ -206,8 +244,42 @@
 			onStartRoleplay={startRoleplay}
 			onCloseRoleplay={closeRoleplay}
 			onApplyTemplate={applyTemplate}
-			onSettingsChange={(newSettings) => (roleplaySettings = newSettings)}
-			systemPrompt={fullSystemPrompt}
+			onSettingsChange={(newSettings) => {
+				const roleChanged =
+					roleplaySettings.characterName !== newSettings.characterName ||
+					roleplaySettings.characterRole !== newSettings.characterRole ||
+					roleplaySettings.sceneDescription !== newSettings.sceneDescription ||
+					roleplaySettings.scenarioDescription !== newSettings.scenarioDescription ||
+					roleplaySettings.systemPrompt !== newSettings.systemPrompt
+
+				// 如果角色相關設定變更，且已在角色扮演模式下有對話歷史，提示用戶
+				if (
+					roleplaySettings.isRoleplayMode &&
+					messages.length > (roleplaySettings.isRoleplayMode ? 1 : 0) &&
+					roleChanged
+				) {
+					if (confirm('修改角色設定將清除所有現有對話歷史，確定要繼續嗎？')) {
+						// 先更新設定
+						roleplaySettings = newSettings
+						roleplayService.saveSettings(roleplaySettings)
+
+						// 重新初始化對話
+						clearMessages()
+						if (newSettings.isRoleplayMode) {
+							// 確保使用最新的系統提示詞
+							messages = [{ role: 'system', content: roleplayService.generateSystemPrompt() }]
+							const welcomeMsg = roleplayService.generateWelcomeMessage()
+							if (welcomeMsg) {
+								messages = [...messages, welcomeMsg]
+							}
+						}
+					}
+				} else {
+					roleplaySettings = newSettings
+					roleplayService.saveSettings(roleplaySettings)
+				}
+			}}
+			systemPrompt={roleplayService.generateSystemPrompt()}
 		/>
 	{/if}
 
