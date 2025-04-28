@@ -1,6 +1,25 @@
+<!--
+@component
+@name MessageItem
+@description 聊天訊息項目元件，負責顯示單條聊天訊息
+@example
+  ```svelte
+  <MessageItem
+    message={{ role: 'user', content: '你好' }}
+    isRoleplayMode={false}
+    characterName="AI助手"
+  />
+  ```
+-->
 <script lang="ts">
 	import type { ChatMessage } from '$lib/types'
 
+	/**
+	 * 元件屬性
+	 * @prop {ChatMessage} message - 訊息物件，包含角色和內容
+	 * @prop {boolean} [isRoleplayMode=false] - 是否為角色扮演模式
+	 * @prop {string} [characterName='AI'] - 角色名稱，在角色扮演模式下顯示
+	 */
 	const {
 		message,
 		isRoleplayMode = false,
@@ -12,12 +31,14 @@
 	}>()
 </script>
 
+<!-- 若訊息是系統訊息，則使用系統訊息樣式 -->
 {#if message.role === 'system'}
 	<div class="message system">
 		<strong>系統提示:</strong>
 		<p>{message.content}</p>
 	</div>
 {:else}
+	<!-- 其他訊息類型（使用者或 AI）使用對應樣式 -->
 	<div class="message {message.role}">
 		<strong>
 			{#if message.role === 'user'}

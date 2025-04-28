@@ -1,4 +1,35 @@
+<!--
+@component
+@name ModelSettings
+@description 模型設定元件，用於選擇 Ollama 模型和設置 API URL
+@example
+  ```svelte
+  <ModelSettings
+    selectedModel="llama2"
+    ollamaBaseUrl="http://localhost:11434"
+    availableModels={["llama2", "mistral", "codellama"]}
+    fetchError={null}
+    loading={false}
+    isModelValid={true}
+    onModelChange={handleModelChange}
+    onUrlChange={handleUrlChange}
+  />
+  ```
+-->
 <script lang="ts">
+	import type { OllamaModel } from '$lib/types'
+
+	/**
+	 * 元件屬性
+	 * @prop {string} [selectedModel=''] - 當前選擇的模型名稱
+	 * @prop {string} [ollamaBaseUrl='http://localhost:11434'] - Ollama API 的基礎 URL
+	 * @prop {string[]} [availableModels=[]] - 可用模型列表
+	 * @prop {string|null} [fetchError=null] - 獲取模型時的錯誤訊息
+	 * @prop {boolean} [loading=false] - 是否正在載入模型
+	 * @prop {boolean} [isModelValid=true] - 當前選擇的模型是否有效
+	 * @prop {function} [onModelChange] - 模型變更時的回調函數
+	 * @prop {function} [onUrlChange] - URL 變更時的回調函數
+	 */
 	const {
 		selectedModel = '',
 		ollamaBaseUrl = 'http://localhost:11434',
@@ -20,10 +51,13 @@
 	}>()
 </script>
 
+<!-- 設定面板容器 -->
 <div class="settings">
+	<!-- 模型選擇區域 -->
 	<label>
 		模型:
 		{#if availableModels.length > 0}
+			<!-- 有可用模型時顯示下拉選單 -->
 			<select
 				value={selectedModel}
 				onchange={(e) => onModelChange((e.target as HTMLSelectElement).value)}
@@ -33,6 +67,7 @@
 					<option value={model}>{model}</option>
 				{/each}
 			</select>
+			<!-- 若選擇的模型無效，顯示警告圖示 -->
 			{#if !isModelValid}
 				<span
 					class="error-tooltip"
@@ -40,11 +75,15 @@
 				>
 			{/if}
 		{:else if fetchError}
+			<!-- 獲取模型失敗時顯示錯誤訊息 -->
 			<span class="error-text">無法載入模型</span>
 		{:else}
+			<!-- 正在載入時顯示載入訊息 -->
 			<span>載入中...</span>
 		{/if}
 	</label>
+
+	<!-- Ollama URL 設置區域 -->
 	<label>
 		Ollama URL:
 		<input
@@ -55,6 +94,8 @@
 			disabled={loading}
 		/>
 	</label>
+
+	<!-- 全域錯誤訊息顯示 -->
 	{#if fetchError}
 		<p class="error-text global-error">錯誤: {fetchError}</p>
 	{/if}

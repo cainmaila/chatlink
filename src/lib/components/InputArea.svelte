@@ -1,4 +1,31 @@
+<!--
+@component
+@name InputArea
+@description 用戶輸入區域元件，處理用戶訊息輸入並提供發送功能
+@example
+  ```svelte
+  <InputArea
+    userInput={inputText}
+    onInputChange={(value) => inputText = value}
+    onSend={handleSend}
+    isModelValid={true}
+    loading={false}
+    isRoleplayMode={false}
+    characterName="AI助手"
+  />
+  ```
+-->
 <script lang="ts">
+	/**
+	 * 元件屬性
+	 * @prop {string} [userInput=''] - 輸入文字值，與父組件同步
+	 * @prop {function} onInputChange - 輸入變更時的回調函數
+	 * @prop {function} onSend - 發送訊息時的回調函數
+	 * @prop {boolean} [isModelValid=true] - 模型是否有效
+	 * @prop {boolean} [isRoleplayMode=false] - 是否為角色扮演模式
+	 * @prop {string} [characterName='AI'] - 角色名稱
+	 * @prop {boolean} [loading=false] - 是否正在載入
+	 */
 	const {
 		userInput = '',
 		onInputChange,
@@ -17,14 +44,22 @@
 		loading?: boolean
 	}>()
 
-	// 本地輸入值，用於即時響應
+	/** 本地輸入值，用於即時響應 */
 	let localInput = $state(userInput)
 
-	// 當父組件的 userInput 變化時，更新本地值
+	/**
+	 * 響應外部 userInput 變化
+	 * 當父組件的 userInput 變化時，更新本地值
+	 */
 	$effect(() => {
 		localInput = userInput
 	})
 
+	/**
+	 * 處理輸入變化
+	 * 更新本地狀態並通知父組件，同時調整文本區域高度
+	 * @param {Event} e - 輸入事件
+	 */
 	function handleInputChange(e: Event) {
 		const target = e.target as HTMLTextAreaElement
 		localInput = target.value
@@ -35,6 +70,11 @@
 		target.style.height = `${target.scrollHeight}px`
 	}
 
+	/**
+	 * 處理鍵盤事件
+	 * 按下 Enter 鍵（不含 Shift）發送訊息
+	 * @param {KeyboardEvent} event - 鍵盤事件
+	 */
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault()
@@ -43,7 +83,9 @@
 	}
 </script>
 
+<!-- 輸入區域容器 -->
 <div class="input-area">
+	<!-- 文本輸入框，支持自動高度調整 -->
 	<textarea
 		value={localInput}
 		onkeydown={handleKeydown}
@@ -52,6 +94,8 @@
 		disabled={loading}
 		rows="1"
 	></textarea>
+
+	<!-- 發送按鈕，根據狀態顯示不同文字 -->
 	<button onclick={onSend} disabled={loading || !localInput.trim() || !isModelValid}>
 		{#if !isModelValid}
 			模型無效

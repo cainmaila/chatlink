@@ -1,13 +1,40 @@
+<!--
+@component
+@name RoleplaySettings
+@description 角色扮演設定元件，提供角色扮演相關參數配置和模板選擇
+@example
+  ```svelte
+  <RoleplaySettings
+    settings={roleplaySettings}
+    isModelValid={true}
+    onStartRoleplay={startRoleplay}
+    onCloseRoleplay={closeRoleplay}
+    onApplyTemplate={applyTemplate}
+    onSettingsChange={handleSettingsChange}
+    systemPrompt="你是一個專業的角色扮演AI..."
+  />
+  ```
+-->
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
 
+	/**
+	 * 元件屬性
+	 * @prop {RoleplaySettings} settings - 角色扮演設定對象
+	 * @prop {boolean} [isModelValid=true] - 模型是否有效
+	 * @prop {function} onStartRoleplay - 開始/重新開始角色扮演的回調函數
+	 * @prop {function} onCloseRoleplay - 關閉角色扮演的回調函數
+	 * @prop {function} onApplyTemplate - 應用角色扮演模板的回調函數
+	 * @prop {function} onSettingsChange - 設定變更時的回調函數
+	 * @prop {string} [systemPrompt=''] - 系統提示詞，用於預覽
+	 */
 	const {
 		settings,
 		isModelValid = true,
 		onStartRoleplay,
 		onCloseRoleplay,
 		onApplyTemplate,
-		onSettingsChange, // 添加新的回調函數用於設置更新
+		onSettingsChange,
 		systemPrompt = ''
 	} = $props<{
 		settings: RoleplaySettings
@@ -19,7 +46,12 @@
 		systemPrompt?: string
 	}>()
 
-	// 處理各種設定值的變更
+	/**
+	 * 處理設定值的更新
+	 * 更新特定設定屬性並通知父組件
+	 * @param {keyof RoleplaySettings} key - 要更新的設定屬性名
+	 * @param {any} value - 新的設定值
+	 */
 	function updateSetting(key: keyof RoleplaySettings, value: any) {
 		onSettingsChange({
 			...settings,
@@ -28,9 +60,11 @@
 	}
 </script>
 
+<!-- 角色扮演設定面板 -->
 <div class="roleplay-settings">
 	<h2>角色扮演設定</h2>
 
+	<!-- 預設模板選擇區域 -->
 	<div class="template-buttons">
 		<span>快速模板：</span>
 		<button onclick={() => onApplyTemplate('fantasy-adventure')}>奇幻冒險</button>
@@ -39,7 +73,9 @@
 		<button onclick={() => onApplyTemplate('historical')}>歷史探索</button>
 	</div>
 
+	<!-- 角色扮演設定表單 -->
 	<div class="settings-grid">
+		<!-- 角色名稱設定 -->
 		<label>
 			角色名稱：
 			<input
@@ -50,6 +86,7 @@
 			/>
 		</label>
 
+		<!-- 角色身份設定 -->
 		<label>
 			角色身份：
 			<input
@@ -60,6 +97,7 @@
 			/>
 		</label>
 
+		<!-- 場景描述設定 -->
 		<label>
 			場景描述：
 			<textarea
@@ -69,6 +107,7 @@
 			></textarea>
 		</label>
 
+		<!-- 情境描述設定 -->
 		<label>
 			情境描述：
 			<textarea
@@ -79,6 +118,7 @@
 			></textarea>
 		</label>
 
+		<!-- 額外系統指令設定 -->
 		<label>
 			額外系統指令：
 			<textarea
@@ -89,15 +129,19 @@
 		</label>
 	</div>
 
+	<!-- 系統提示預覽區域 -->
 	<div class="preview-section">
 		<h3>系統提示預覽：</h3>
 		<pre class="system-preview">{systemPrompt}</pre>
 	</div>
 
+	<!-- 操作按鈕區域 -->
 	<div class="roleplay-buttons">
+		<!-- 開始/重新開始角色扮演按鈕 -->
 		<button class="start-button" onclick={onStartRoleplay} disabled={!isModelValid}>
 			{settings.isRoleplayMode ? '重新開始角色扮演' : '開始角色扮演'}
 		</button>
+		<!-- 關閉角色扮演按鈕 -->
 		<button class="clear-button" onclick={onCloseRoleplay}> 關閉角色扮演 </button>
 	</div>
 </div>
