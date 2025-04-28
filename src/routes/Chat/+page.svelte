@@ -30,36 +30,12 @@
 	let selectedModel = $derived(modelSettings.model)
 	let ollamaBaseUrl = $derived(modelSettings.baseUrl)
 
-	// 生成系統提示詞
-	let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
-	let previousSystemPrompt = $state('')
-
-	// 當 roleplaySettings 變化時，確保重新生成 system 提示詞
-	$effect(() => {
-		// 當角色設定發生變化時，强制重新生成系統提示詞
-		if (roleplaySettings.isRoleplayMode) {
-			// 直接從 roleplayService 獲取最新的系統提示詞
-			const newSystemPrompt = roleplayService.generateSystemPrompt()
-
-			// 只有當系統提示詞實際變化時才進行更新
-			if (newSystemPrompt !== previousSystemPrompt) {
-				previousSystemPrompt = newSystemPrompt
-
-				// 更新 UI 顯示的消息列表中的系統提示詞
-				updateSystemPromptInMessages(newSystemPrompt)
-			}
-		}
-	})
-
-	// 輔助函數：更新消息列表中的系統提示詞
-	function updateSystemPromptInMessages(systemPrompt: string) {
-		if (!systemPrompt || !roleplaySettings.isRoleplayMode) return
-		// 將新陣列設定為 messages
-		messages = [{ role: 'system', content: systemPrompt }]
-		console.log('系統提示詞已更新:', systemPrompt)
-	}
+	// 生成系統提示詞 - 不再使用 $derived，將在 sendMessage 中即時生成
+	// let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
+	let previousSystemPrompt = $state('') // 仍然可以用於比較，但不再觸發 message 清除
 
 	// 注意：不再使用 $derived 創建 LLM，因為在發送消息時會直接創建最新的實例
+	// 移除 $effect 和 updateSystemPromptInMessages，因為 startRoleplay 和 sendMessage 會處理提示詞
 
 	// --- Effects ---
 	onMount(() => {
@@ -140,33 +116,51 @@
 		}
 	}
 
-	// 清除對話歷史
+	// 清除對話歷史 - 簡化為完全清空
 	function clearMessages() {
-		if (roleplaySettings.isRoleplayMode && fullSystemPrompt) {
-			messages = [{ role: 'system', content: fullSystemPrompt }]
-		}
+		messages = []
+		console.log('clearMessages executed. Messages cleared.')
 	}
 
-	// 開始新的角色扮演對話
+	// 開始新的角色扮演對話 - 強化初始化邏輯
 	function startRoleplay() {
+		// 1. 確保 isRoleplayMode 為 true (可能已被 onSettingsChange 或 applyTemplate 設置)
 		roleplaySettings.isRoleplayMode = true
+		console.log('Ensured roleplay mode is true.')
+
+		// 2. **先保存**當前設定到 Service，確保 Service 內部狀態最新
+		//    這樣後續 generateSystemPrompt 就會使用最新的設定
 		roleplayService.saveSettings(roleplaySettings)
+		console.log('Saved current roleplaySettings to service.')
 
-		// 重新初始化 OllamaService 以確保不會保留舊的對話上下文
-		// 使用當前設定的 URL 和模型名稱，溫度使用默認值
+		// 3. 生成最新的系統提示詞 (現在基於 Service 最新的內部狀態)
+		const newSystemPrompt = roleplayService.generateSystemPrompt()
+		console.log('Starting roleplay with prompt:', newSystemPrompt)
+
+		// 4. 重新初始化 OllamaService
 		ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
+		console.log('OllamaService re-initialized.')
 
+		// 5. 徹底清空消息歷史
 		clearMessages()
 
+		// 6. 設置新的初始消息 (系統提示 + 歡迎訊息)
+		let initialMessages: ChatMessage[] = []
+		if (newSystemPrompt) {
+			initialMessages.push({ role: 'system', content: newSystemPrompt })
+		}
 		const welcomeMessage = roleplayService.generateWelcomeMessage()
 		if (welcomeMessage) {
-			messages = [...messages, welcomeMessage]
+			initialMessages.push(welcomeMessage)
 		}
+		messages = initialMessages
+		console.log('After startRoleplay initialization, messages:', JSON.stringify(messages))
 
+		// 7. 關閉設定面板
 		showRoleplaySettings = false
 	}
 
-	// 關閉角色扮演
+	// 關閉角色扮演 - 確保清空 messages
 	function closeRoleplay() {
 		// 提示用戶確認是否關閉角色扮演
 		if (messages.length > 0) {
@@ -178,10 +172,12 @@
 		roleplaySettings.isRoleplayMode = false
 		roleplayService.saveSettings(roleplaySettings)
 
-		// 重新初始化 OllamaService 以確保不會保留舊的對話上下文
+		// 重新初始化 OllamaService
 		ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
 
+		// 徹底清空消息歷史
 		clearMessages()
+		console.log('Roleplay closed. Messages cleared.')
 	}
 
 	// 切換是否顯示角色扮演設定面板
@@ -204,11 +200,16 @@
 			let historyMessages = JSON.parse(JSON.stringify(messages))
 
 			// 在角色扮演模式下，確保使用最新的系統提示詞
-			if (roleplaySettings.isRoleplayMode && fullSystemPrompt) {
+			if (roleplaySettings.isRoleplayMode) {
+				const currentSystemPrompt = roleplayService.generateSystemPrompt() // <-- 即時生成
+				console.log('sendMessage: Using system prompt:', currentSystemPrompt) // <-- 使用即時生成的提示詞
 				// 移除現有的系統提示詞（如果有）
 				historyMessages = historyMessages.filter((msg: ChatMessage) => msg.role !== 'system')
 				// 將最新的系統提示詞添加到歷史記錄的開頭
-				historyMessages.unshift({ role: 'system', content: fullSystemPrompt })
+				if (currentSystemPrompt) {
+					// 確保提示詞存在
+					historyMessages.unshift({ role: 'system', content: currentSystemPrompt })
+				}
 			}
 
 			// 確保 LLM 實例是最新的
@@ -264,42 +265,95 @@
 			onCloseRoleplay={closeRoleplay}
 			onApplyTemplate={applyTemplate}
 			onSettingsChange={(newSettings) => {
-				const roleChanged =
+				const wasRoleplayMode = roleplaySettings.isRoleplayMode
+				const isNowRoleplayMode = newSettings.isRoleplayMode
+				const roleDetailsChanged =
 					roleplaySettings.characterName !== newSettings.characterName ||
 					roleplaySettings.characterRole !== newSettings.characterRole ||
 					roleplaySettings.sceneDescription !== newSettings.sceneDescription ||
 					roleplaySettings.scenarioDescription !== newSettings.scenarioDescription ||
 					roleplaySettings.systemPrompt !== newSettings.systemPrompt
 
-				// 如果角色相關設定變更，且已在角色扮演模式下有對話歷史，提示用戶
-				if (
-					roleplaySettings.isRoleplayMode &&
-					messages.length > (roleplaySettings.isRoleplayMode ? 1 : 0) &&
-					roleChanged
-				) {
-					if (confirm('修改角色設定將清除所有現有對話歷史，確定要繼續嗎？')) {
-						// 先更新設定
+				// 處理設定變更的核心邏輯
+				const processSettingsChange = () => {
+					console.log('onSettingsChange triggered. New settings:', newSettings)
+					console.log('Current messages length:', messages.length)
+					console.log(
+						'Was roleplay:',
+						wasRoleplayMode,
+						'Is now roleplay:',
+						isNowRoleplayMode,
+						'Details changed:',
+						roleDetailsChanged
+					)
+
+					// 情況 1: 從非角色扮演模式切換到角色扮演模式
+					if (!wasRoleplayMode && isNowRoleplayMode) {
+						console.log('Case 1: Enabling roleplay mode.')
+						roleplaySettings = newSettings // 先更新設定，讓 startRoleplay 能讀取到
+						startRoleplay() // 使用 startRoleplay 處理初始化
+						return
+					}
+
+					// 情況 2: 角色扮演模式下，角色細節發生變化
+					if (wasRoleplayMode && isNowRoleplayMode && roleDetailsChanged) {
+						console.log('Case 2: Role details changed while in roleplay mode.')
+						// 檢查是否有 user/ai 訊息 (messages[0] 通常是 system prompt)
+						if (messages.length > 1) {
+							console.log('History exists, prompting user.')
+							if (confirm('修改角色設定將清除所有現有對話歷史，確定要繼續嗎？')) {
+								console.log('User confirmed history clear.')
+								roleplaySettings = newSettings // 更新設定
+								startRoleplay() // 調用 startRoleplay 處理重置
+							} else {
+								console.log('User cancelled history clear.')
+								// 如果用戶取消，則不做任何事，設定維持不變
+							}
+						} else {
+							// 如果沒有對話歷史 (只有 system prompt 或為空)，直接應用新設定並重新開始
+							console.log('No significant history, applying changes and restarting.')
+							roleplaySettings = newSettings
+							startRoleplay()
+						}
+						return
+					}
+
+					// 情況 3: 從角色扮演模式切換到非角色扮演模式
+					// 這個應該由 RoleplaySettings 元件內部的 "關閉角色扮演" 按鈕觸發 onCloseRoleplay 回調處理，
+					// onSettingsChange 不應該處理 isNowRoleplayMode 為 false 的情況，除非是保存非角色扮演模式下的設定。
+					if (wasRoleplayMode && !isNowRoleplayMode) {
+						console.warn(
+							'Case 3: Attempting to disable roleplay via onSettingsChange? This should be handled by onCloseRoleplay.'
+						)
+						// 為保險起見，僅保存設定，但不調用 closeRoleplay (避免重複確認)
 						roleplaySettings = newSettings
 						roleplayService.saveSettings(roleplaySettings)
-
-						// 重新初始化 OllamaService 以確保不會保留舊的對話上下文
-						ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
-
-						// 重新初始化對話
-						clearMessages()
-						if (newSettings.isRoleplayMode) {
-							// 確保使用最新的系統提示詞
-							messages = [{ role: 'system', content: roleplayService.generateSystemPrompt() }]
-							const welcomeMsg = roleplayService.generateWelcomeMessage()
-							if (welcomeMsg) {
-								messages = [...messages, welcomeMsg]
-							}
-						}
+						return
 					}
-				} else {
-					roleplaySettings = newSettings
-					roleplayService.saveSettings(roleplaySettings)
+
+					// 情況 4: 其他情況（例如，僅改變 isRoleplayMode 但未觸發情況1，或未改變角色細節）
+					// 只更新和保存設定，不重置對話 (除非是從 false -> true，已在情況1處理)
+					if (isNowRoleplayMode === wasRoleplayMode) {
+						console.log(
+							'Case 4: Settings changed, but no roleplay state change or major detail change requiring reset.'
+						)
+						roleplaySettings = newSettings
+						roleplayService.saveSettings(roleplaySettings)
+						// 如果只是在非角色扮演模式下修改了某些欄位，保存即可
+						// 如果在角色扮演模式下修改了非角色細節的欄位（例如溫度等，如果有的話），也只保存
+					} else {
+						// 捕捉未預期的狀態轉換
+						console.warn('Unhandled case in onSettingsChange:', {
+							wasRoleplayMode,
+							isNowRoleplayMode,
+							roleDetailsChanged
+						})
+						roleplaySettings = newSettings // 默認保存設定
+						roleplayService.saveSettings(roleplaySettings)
+					}
 				}
+
+				processSettingsChange()
 			}}
 			systemPrompt={roleplayService.generateSystemPrompt()}
 		/>
