@@ -22,17 +22,45 @@
 	let roleplayService = $state(new RoleplayService())
 
 	// --- Derived State ---
-	// 載入設定
+	// 載入設定 - 使用 $derived 確保當 ollamaService 變化時自動更新
 	let modelSettings = $derived(ollamaService.loadSettings())
-	let roleplaySettings = $derived(roleplayService.loadSettings())
+	let roleplaySettings = $state(roleplayService.loadSettings())
 	let selectedModel = $derived(modelSettings.model)
 	let ollamaBaseUrl = $derived(modelSettings.baseUrl)
 
 	// 生成系統提示詞
 	let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
+	let previousSystemPrompt = $state('')
 
-	// 創建 LLM
-	let llm = $derived(ollamaService.createLLM())
+	// 當 fullSystemPrompt 變化時自動更新消息中的系統提示詞，避免無限循環
+	$effect(() => {
+		// 只有當系統提示詞實際變化時才進行更新，避免無限循環
+		if (
+			fullSystemPrompt !== previousSystemPrompt &&
+			roleplaySettings.isRoleplayMode &&
+			fullSystemPrompt
+		) {
+			// 更新先前的系統提示詞
+			previousSystemPrompt = fullSystemPrompt
+
+			// 檢查是否有舊的系統提示詞
+			const hasSystemMessage = messages.some((msg) => msg.role === 'system')
+
+			if (hasSystemMessage) {
+				// 使用淺拷貝避免觸發多餘的反應性更新
+				const updatedMessages = messages.map((msg) =>
+					msg.role === 'system' ? { ...msg, content: fullSystemPrompt } : msg
+				)
+				// 一次性更新 messages
+				messages = updatedMessages
+			} else if (messages.length > 0) {
+				// 一次性添加系統提示詞
+				messages = [{ role: 'system', content: fullSystemPrompt }, ...messages]
+			}
+		}
+	})
+
+	// 注意：不再使用 $derived 創建 LLM，因為在發送消息時會直接創建最新的實例
 
 	// --- Effects ---
 	onMount(() => {
@@ -162,6 +190,10 @@
 
 		roleplaySettings.isRoleplayMode = false
 		roleplayService.saveSettings(roleplaySettings)
+
+		// 重新初始化 OllamaService 以確保不會保留舊的對話上下文
+		ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
+
 		clearMessages()
 	}
 
@@ -262,6 +294,9 @@
 						// 先更新設定
 						roleplaySettings = newSettings
 						roleplayService.saveSettings(roleplaySettings)
+
+						// 重新初始化 OllamaService 以確保不會保留舊的對話上下文
+						ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
 
 						// 重新初始化對話
 						clearMessages()
