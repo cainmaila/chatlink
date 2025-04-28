@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<style>
+			:root {
+				/* 亮色模式變數 */
+				--background-color: #ffffff;
+				--text-color: #333333;
+				--secondary-bg-color: #f9f9f9;
+				--border-color: #cccccc;
+				--primary-color: #007bff;
+				--primary-hover-color: #0056b3;
+				--message-user-bg: #007bff;
+				--message-user-text: white;
+				--message-ai-bg: #e9ecef;
+				--message-ai-text: #333333;
+				--input-bg: #ffffff;
+				--error-color: #ff3333;
+				--warning-color: #ff9800;
+			}
+
+			/* 暗色模式 */
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--background-color: #1e1e1e;
+					--text-color: #e0e0e0;
+					--secondary-bg-color: #2d2d2d;
+					--border-color: #444444;
+					--primary-color: #0d6efd;
+					--primary-hover-color: #0b5ed7;
+					--message-user-bg: #0d6efd;
+					--message-user-text: #f5f5f5;
+					--message-ai-bg: #3a3a3a;
+					--message-ai-text: #e0e0e0;
+					--input-bg: #333333;
+					--error-color: #ff5252;
+					--warning-color: #ffb74d;
+				}
+			}
+
+			/* 全局基本樣式 */
+			body {
+				background-color: var(--background-color);
+				color: var(--text-color);
+				margin: 0;
+				padding: 0;
+				font-family:
+					-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+					'Open Sans', 'Helvetica Neue', sans-serif;
+				transition:
+					background-color 0.3s ease,
+					color 0.3s ease;
+			}
+
+			/* 統一按鈕樣式 */
+			button {
+				background-color: var(--primary-color);
+				color: white;
+				border: none;
+				border-radius: 4px;
+				padding: 8px 16px;
+				cursor: pointer;
+				font-weight: 500;
+				transition: background-color 0.2s;
+			}
+
+			button:hover:not(:disabled) {
+				background-color: var(--primary-hover-color);
+			}
+
+			button:disabled {
+				opacity: 0.6;
+				cursor: not-allowed;
+			}
+
+			/* 統一輸入框樣式 */
+			input,
+			textarea,
+			select {
+				background-color: var(--input-bg);
+				color: var(--text-color);
+				border: 1px solid var(--border-color);
+				border-radius: 4px;
+			}
+
+			/* 滾動條樣式 */
+			::-webkit-scrollbar {
+				width: 8px;
+				height: 8px;
+			}
+
+			::-webkit-scrollbar-track {
+				background: var(--secondary-bg-color);
+			}
+
+			::-webkit-scrollbar-thumb {
+				background: #888;
+				border-radius: 4px;
+			}
+
+			::-webkit-scrollbar-thumb:hover {
+				background: #666;
+			}
+		</style>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
