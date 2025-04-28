@@ -28,8 +28,6 @@
 	let selectedModel = $derived(modelSettings.model)
 	let ollamaBaseUrl = $derived(modelSettings.baseUrl)
 
-	$inspect(messages)
-
 	// 生成系統提示詞
 	let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
 	let previousSystemPrompt = $state('')
