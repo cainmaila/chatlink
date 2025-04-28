@@ -142,7 +142,6 @@
 
 	// 清除對話歷史
 	function clearMessages() {
-		messages = []
 		if (roleplaySettings.isRoleplayMode && fullSystemPrompt) {
 			messages = [{ role: 'system', content: fullSystemPrompt }]
 		}
