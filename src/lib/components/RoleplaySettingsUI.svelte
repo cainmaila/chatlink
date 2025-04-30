@@ -133,9 +133,9 @@
 	/** 處理保存模板 - 使用本地狀態 */
 	function handleSaveTemplate() {
 		if (!newTemplateName.trim()) return;
-		// 從當前 localSettings 提取模板相關部分
-		const { isRoleplayMode, avatarBase64, ...templateSettings } = localSettings; // 使用 localSettings
-		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings);
+		// 從當前 localSettings 提取模板相關部分，這次要包含 avatarBase64
+		const { isRoleplayMode, ...templateSettingsWithAvatar } = localSettings; // 解構時保留 avatarBase64
+		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettingsWithAvatar); // 傳遞包含頭像的設定
 		if (success) {
 			const savedName = newTemplateName.trim();
 			newTemplateName = '';

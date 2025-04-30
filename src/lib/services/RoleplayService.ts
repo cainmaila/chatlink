@@ -10,11 +10,15 @@ export const ROLEPLAY_SETTINGS_KEY = 'roleplay_settings';
 /** 角色扮演模板在 localStorage 中的鍵名 */
 export const ROLEPLAY_TEMPLATES_KEY = 'roleplay_templates';
 
+// 定義模板類型，包含頭像
+export type RoleplayTemplate = Omit<RoleplaySettings, 'isRoleplayMode'>;
+
 // 定義預設模板
-const DEFAULT_TEMPLATES: Record<string, Omit<RoleplaySettings, 'isRoleplayMode'>> = {
+const DEFAULT_TEMPLATES: Record<string, RoleplayTemplate> = {
 	'奇幻冒險': {
 		characterName: '艾爾文',
 		characterRole: '魔法師導遊',
+		avatarBase64: undefined, // 模板包含頭像欄位
 		sceneDescription: '埃爾德林中世紀奇幻王國，充滿魔法與神秘生物的翡翠森林',
 		scenarioDescription: '帶領冒險者穿越危險的翡翠森林，尋找失落的龍族寶藏',
 		systemPrompt:
@@ -23,6 +27,7 @@ const DEFAULT_TEMPLATES: Record<string, Omit<RoleplaySettings, 'isRoleplayMode'>
 	'科幻宇宙': {
 		characterName: 'Nova-7',
 		characterRole: '星際飛船AI',
+		avatarBase64: undefined,
 		sceneDescription: '銀河聯邦太空站阿爾法-9，位於仙女座星系邊緣',
 		scenarioDescription: '太空站遇到引力波干擾，需要幫助乘客解決各種宇宙難題',
 		systemPrompt: '使用科幻術語和技術語言，呈現未來科技感。結合故障排除和太空冒險元素。'
@@ -30,6 +35,7 @@ const DEFAULT_TEMPLATES: Record<string, Omit<RoleplaySettings, 'isRoleplayMode'>
 	'偵探推理': {
 		characterName: '夏洛克',
 		characterRole: '名偵探',
+		avatarBase64: undefined,
 		sceneDescription: '霧氣彌漫的維多利亞時代英國倫敦，貝克街221B',
 		scenarioDescription: '調查一起發生在泰晤士河畔的神秘珠寶失竊案，需要分析線索、詢問目擊者',
 		systemPrompt:
@@ -38,6 +44,7 @@ const DEFAULT_TEMPLATES: Record<string, Omit<RoleplaySettings, 'isRoleplayMode'>
 	'歷史探索': {
 		characterName: '教授',
 		characterRole: '歷史學者',
+		avatarBase64: undefined,
 		sceneDescription: '亞歷山大港古代圖書館，公元前三世紀的埃及',
 		scenarioDescription: '探索古埃及、古希臘與古羅馬的歷史事件，解答歷史謎團',
 		systemPrompt: '提供準確的歷史知識，並用生動的方式描述歷史場景。可以角色化地講述歷史故事。'
@@ -53,7 +60,7 @@ export class RoleplayService {
 	/** 當前角色扮演設定對象 */
 	private settings: RoleplaySettings;
 	/** 所有角色扮演模板 (名稱 -> 設定) */
-	private templates: Record<string, Omit<RoleplaySettings, 'isRoleplayMode'>>;
+	private templates: Record<string, RoleplayTemplate>; // 使用新的模板類型
 
 	/**
 	 * 創建 RoleplayService 實例
@@ -162,21 +169,21 @@ export class RoleplayService {
 	}
 
 	/**
-	 * 根據名稱獲取模板設定 (不包含 isRoleplayMode)
+	 * 根據名稱獲取模板設定
 	 * @param {string} name - 模板名稱
-	 * @returns {Omit<RoleplaySettings, 'isRoleplayMode'> | undefined} 模板設定或 undefined
+	 * @returns {RoleplayTemplate | undefined} 模板設定或 undefined
 	 */
-	getTemplate(name: string): Omit<RoleplaySettings, 'isRoleplayMode'> | undefined {
+	getTemplate(name: string): RoleplayTemplate | undefined { // 返回包含頭像的完整模板
 		return this.templates[name] ? { ...this.templates[name] } : undefined;
 	}
 
 	/**
 	 * 將指定設定儲存為新模板或覆蓋現有模板
 	 * @param {string} name - 模板名稱
-	 * @param {Omit<RoleplaySettings, 'isRoleplayMode'>} templateSettings - 要儲存的模板設定
+	 * @param {RoleplayTemplate} templateSettings - 要儲存的模板設定 (包含頭像)
 	 * @returns {boolean} 是否成功儲存
 	 */
-	saveTemplate(name: string, templateSettings: Omit<RoleplaySettings, 'isRoleplayMode'>): boolean {
+	saveTemplate(name: string, templateSettings: RoleplayTemplate): boolean { // 接收包含頭像的模板
 		if (!name || !name.trim()) {
 			console.error('模板名稱不能為空');
 			return false;
@@ -206,14 +213,13 @@ export class RoleplayService {
 	 * @returns {RoleplaySettings | null} 套用模板後的角色扮演設定，如果模板不存在則返回 null
 	 */
 	applyTemplate(templateName: string): RoleplaySettings | null {
-		const template = this.getTemplate(templateName);
+		const template = this.getTemplate(templateName); // 獲取包含頭像的模板
 		if (template) {
-			// 合併模板設定到當前設定，保留 isRoleplayMode 和 avatarBase64
-			const currentAvatar = this.settings.avatarBase64; // 先保存當前的頭像
+			// 合併模板設定到當前設定，保留 isRoleplayMode
+			// 模板中的 avatarBase64 會直接覆蓋當前的
 			this.settings = {
-				...this.settings, // 保留 isRoleplayMode 等非模板欄位
-				...template, // 用模板覆蓋相關欄位
-				avatarBase64: currentAvatar // 重新應用保存的頭像
+				...this.settings, // 保留 isRoleplayMode
+				...template // 用模板覆蓋相關欄位 (包括 avatarBase64)
 			};
 			// 注意：這裡不自動保存 settings，讓調用者決定何時保存
 			return this.getSettings(); // 返回更新後的設定副本

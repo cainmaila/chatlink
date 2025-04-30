@@ -81,10 +81,8 @@
 		// 這些操作由專門的按鈕（開始、關閉、套用模板）觸發。
 
 		roleplaySettings = newSettings // 直接更新父元件的狀態
-
-		// 注意：保存設定到 localStorage 的操作現在由 RoleplayService 內部處理，
-		// 或者可以考慮在明確的操作（如保存模板、開始/關閉角色扮演）後調用 roleplayService.saveSettings()。
-		// 為了簡單起見，暫時不在這裡觸發保存。
+		// 任何通過 UI 進行的設定變更都應立即保存
+		roleplayService.saveSettings(roleplaySettings);
 	}
 
 	/**
@@ -156,7 +154,8 @@ JSON 格式：
 					characterRole: generatedData.characterRole,
 					sceneDescription: generatedData.sceneDescription,
 					scenarioDescription: generatedData.scenarioDescription,
-					systemPrompt: generatedData.systemPrompt
+					systemPrompt: generatedData.systemPrompt,
+					avatarBase64: undefined // AI 無法生成頭像，設為 undefined
 				}
 			} catch (parseError) {
 				console.error('解析 AI 回應 JSON 時發生錯誤:', parseError)
