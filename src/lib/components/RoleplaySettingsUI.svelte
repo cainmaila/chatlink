@@ -1,4 +1,4 @@
-<!--
+｀<!--
 @component
 @name RoleplaySettings
 @description 角色扮演設定元件，提供角色扮演相關參數配置和模板選擇
@@ -67,40 +67,90 @@
 	let isGeneratingAI = $state(false) // 新增：用於顯示 AI 生成按鈕的加載狀態
 	let isUploadingImage = $state(false) // 新增：用於顯示圖片上傳狀態
 
+	// --- 新增：本地表單狀態 ---
+	let localSettings = $state<RoleplaySettings>(JSON.parse(JSON.stringify(settings))); // Deep copy initial settings
+
+	// --- 效果：當外部 settings 變化時，同步本地狀態 (除非正在預覽模板) ---
+	$effect(() => {
+		// 只有在沒有選擇模板預覽時，才用外部 settings 更新本地狀態
+		if (!selectedTemplate) {
+			console.log("External settings changed, updating localSettings:", settings);
+			localSettings = JSON.parse(JSON.stringify(settings)); // Deep copy
+		} else {
+			console.log("External settings changed, but template is selected, not updating localSettings from props.");
+		}
+	});
+
+
+	// --- 效果：當選擇的模板變化時，更新本地狀態以預覽 ---
+	$effect(() => {
+		if (selectedTemplate) {
+			const templateData = roleplayService.getTemplate(selectedTemplate);
+			if (templateData) {
+				console.log(`Previewing template: ${selectedTemplate}`, templateData);
+				// 更新本地狀態以預覽模板，保留 isRoleplayMode 和 avatarBase64
+				localSettings = {
+					...localSettings, // 保留 isRoleplayMode 和 avatarBase64
+					characterName: templateData.characterName,
+					characterRole: templateData.characterRole,
+					sceneDescription: templateData.sceneDescription,
+					scenarioDescription: templateData.scenarioDescription,
+					systemPrompt: templateData.systemPrompt,
+				};
+			}
+		} else {
+			// 如果取消選擇模板，恢復到父元件傳入的 settings
+			console.log("Template deselected, reverting localSettings to props settings:", settings);
+			localSettings = JSON.parse(JSON.stringify(settings)); // Deep copy
+		}
+		// 預覽變化時，也通知父元件 (可選，取決於是否希望父元件知道預覽狀態)
+		// onSettingsChange(localSettings); // 如果需要父元件也同步預覽狀態，取消此行註解
+	});
+
+
 	// --- 函數 ---
 	/**
-	 * 處理設定值的更新
-	 * 更新特定設定屬性並通知父組件
+	 * 處理本地設定值的更新
+	 * 更新特定本地設定屬性並通知父組件
 	 * @param {keyof RoleplaySettings} key - 要更新的設定屬性名
 	 * @param {any} value - 新的設定值
 	 */
-	function updateSetting(key: keyof RoleplaySettings, value: any) {
-		// 創建一個新的設定物件傳遞給父元件
-		const updatedSettings: RoleplaySettings = {
-			...settings,
+	function updateLocalSetting(key: keyof RoleplaySettings, value: any) {
+		// 更新本地狀態
+		localSettings = {
+			...localSettings,
 			[key]: value
-		}
-		onSettingsChange(updatedSettings) // 觸發回調
+		};
+		// 同步通知父元件
+		onSettingsChange(localSettings);
+		console.log(`Local setting ${key} updated, notified parent.`);
+
+		// 如果使用者手動修改了欄位，且當前正在預覽某個模板，
+		// 可以考慮取消模板的選中狀態，因為表單內容不再是純粹的模板預覽了。
+		// if (selectedTemplate) {
+		//   selectedTemplate = ''; // 取消選中
+		//   console.log("User edited field while previewing, template deselected.");
+		// }
 	}
+
 
 	// --- 事件處理 ---
 
-	/** 處理保存模板 */
+	/** 處理保存模板 - 使用本地狀態 */
 	function handleSaveTemplate() {
-		if (!newTemplateName.trim()) return
-		// 從當前 settings 提取模板相關部分
-		const { isRoleplayMode, ...templateSettings } = settings
-		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings)
+		if (!newTemplateName.trim()) return;
+		// 從當前 localSettings 提取模板相關部分
+		const { isRoleplayMode, avatarBase64, ...templateSettings } = localSettings; // 使用 localSettings
+		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings);
 		if (success) {
-			console.log(`模板 "${newTemplateName.trim()}" 已保存。`)
-			const savedName = newTemplateName.trim() // 保存名稱以便後續使用
-			newTemplateName = '' // 清空輸入框
-			templateNames = roleplayService.getTemplateNames() // 更新模板列表狀態
-			selectedTemplate = savedName // 自動選中剛保存的模板
-			onTemplateListChange() // 通知父組件列表已更新 (如果父組件需要響應)
+			console.log(`模板 "${newTemplateName.trim()}" 已保存 (from local state)。`);
+			const savedName = newTemplateName.trim();
+			newTemplateName = '';
+			templateNames = roleplayService.getTemplateNames();
+			selectedTemplate = savedName; // 自動選中剛保存的模板
+			onTemplateListChange();
 		} else {
-			// 可以添加錯誤提示
-			console.error(`無法保存模板 "${newTemplateName.trim()}"。`)
+			console.error(`無法保存模板 "${newTemplateName.trim()}"。`);
 		}
 	}
 
@@ -168,11 +218,11 @@
 
 			const reader = new FileReader()
 			reader.onloadend = () => {
-				const base64String = reader.result as string
-				// 更新父元件狀態
-				updateSetting('avatarBase64', base64String)
-				isUploadingImage = false
-			}
+				const base64String = reader.result as string;
+				// 更新本地狀態並通知父元件
+				updateLocalSetting('avatarBase64', base64String); // <--- 改用 updateLocalSetting
+				isUploadingImage = false;
+			};
 			reader.onerror = (error) => {
 				console.error('讀取壓縮圖片時發生錯誤:', error)
 				alert('讀取圖片失敗。')
@@ -242,7 +292,7 @@
 			<label for="avatar-upload">AI 頭像：</label>
 			<div class="avatar-controls">
 				<img
-					src={settings.avatarBase64 || '/favicon.png'}
+					src={localSettings.avatarBase64 || '/favicon.png'}
 					alt="AI 頭像預覽"
 					class="avatar-preview"
 					onerror={handleImageError}
@@ -262,10 +312,10 @@
 				>
 					{isUploadingImage ? '上傳中...' : '選擇圖片'}
 				</button>
-				{#if settings.avatarBase64}
+				{#if localSettings.avatarBase64}
 					<button
 						class="remove-button"
-						onclick={() => updateSetting('avatarBase64', undefined)}
+						onclick={() => updateLocalSetting('avatarBase64', undefined)}
 						disabled={isUploadingImage}
 						title="移除頭像"
 					>
@@ -281,8 +331,8 @@
 			角色名稱：
 			<input
 				type="text"
-				value={settings.characterName}
-				oninput={(e) => updateSetting('characterName', (e.target as HTMLInputElement).value)}
+				bind:value={localSettings.characterName}
+				oninput={(e: Event & { currentTarget: HTMLInputElement }) => updateLocalSetting('characterName', e.currentTarget.value)}
 				placeholder="例如：艾爾文、Nova-7、夏洛克..."
 			/>
 		</label>
@@ -292,8 +342,8 @@
 			角色身份：
 			<input
 				type="text"
-				value={settings.characterRole}
-				oninput={(e) => updateSetting('characterRole', (e.target as HTMLInputElement).value)}
+				bind:value={localSettings.characterRole}
+				oninput={(e: Event & { currentTarget: HTMLInputElement }) => updateLocalSetting('characterRole', e.currentTarget.value)}
 				placeholder="例如：魔法師、星際飛船AI、名偵探..."
 			/>
 		</label>
@@ -302,8 +352,8 @@
 		<label>
 			場景描述：
 			<textarea
-				value={settings.sceneDescription}
-				oninput={(e) => updateSetting('sceneDescription', (e.target as HTMLTextAreaElement).value)}
+				bind:value={localSettings.sceneDescription}
+				oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) => updateLocalSetting('sceneDescription', e.currentTarget.value)}
 				placeholder="在哪裡？什麼樣的環境？例如：中世紀城堡、未來太空站..."
 			></textarea>
 		</label>
@@ -312,9 +362,9 @@
 		<label>
 			情境描述：
 			<textarea
-				value={settings.scenarioDescription}
-				oninput={(e) =>
-					updateSetting('scenarioDescription', (e.target as HTMLTextAreaElement).value)}
+				bind:value={localSettings.scenarioDescription}
+				oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) =>
+					updateLocalSetting('scenarioDescription', e.currentTarget.value)}
 				placeholder="正在發生什麼事？例如：探索遺跡、解決太空船故障..."
 			></textarea>
 		</label>
@@ -323,8 +373,8 @@
 		<label>
 			額外系統指令：
 			<textarea
-				value={settings.systemPrompt}
-				oninput={(e) => updateSetting('systemPrompt', (e.target as HTMLTextAreaElement).value)}
+				bind:value={localSettings.systemPrompt}
+				oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) => updateLocalSetting('systemPrompt', e.currentTarget.value)}
 				placeholder="其他想對AI說的指示，例如：使用特定的語氣或風格回應..."
 			></textarea>
 		</label>

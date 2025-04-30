@@ -208,13 +208,14 @@ export class RoleplayService {
 	applyTemplate(templateName: string): RoleplaySettings | null {
 		const template = this.getTemplate(templateName);
 		if (template) {
-			// 合併模板設定到當前設定，保留 isRoleplayMode
+			// 合併模板設定到當前設定，保留 isRoleplayMode 和 avatarBase64
+			const currentAvatar = this.settings.avatarBase64; // 先保存當前的頭像
 			this.settings = {
 				...this.settings, // 保留 isRoleplayMode 等非模板欄位
-				...template // 用模板覆蓋相關欄位
+				...template, // 用模板覆蓋相關欄位
+				avatarBase64: currentAvatar // 重新應用保存的頭像
 			};
 			// 注意：這裡不自動保存 settings，讓調用者決定何時保存
-			// this.saveSettings(this.settings);
 			return this.getSettings(); // 返回更新後的設定副本
 		}
 		console.warn(`模板 "${templateName}" 不存在。`);
