@@ -217,9 +217,12 @@ JSON 格式：
 			// 檢查 newSettings 是否有效
 			roleplaySettings = newSettings // 只有在有效時才賦值
 
+			// 無論如何都保存新套用的設定
+			roleplayService.saveSettings(roleplaySettings)
+
 			// 如果已經在角色扮演模式，自動重新開始對話
 			if (roleplaySettings.isRoleplayMode) {
-				startRoleplay()
+				startRoleplay() // startRoleplay 內部也會保存，但此處保存確保非 roleplay 模式下也能持久化
 			}
 		} else {
 			// 可選：處理模板不存在的情況，例如顯示錯誤訊息
