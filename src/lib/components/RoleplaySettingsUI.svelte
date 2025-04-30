@@ -31,6 +31,7 @@
 	 * @prop {function} onApplyTemplate - 應用角色扮演模板的回調函數 (父組件處理)
 	 * @prop {function} onSettingsChange - 設定變更時的回調函數 (父組件處理)
 	 * @prop {function} onTemplateListChange - 模板列表變更時的回調 (通知父組件刷新列表)
+	 * @prop {function} onGenerateTemplateAI - 觸發 AI 生成模板的回調函數 (父組件處理)
 	 * @prop {string} [systemPrompt=''] - 系統提示詞，用於預覽
 	 */
 	const {
@@ -43,6 +44,7 @@
 		onApplyTemplate, // 父組件處理套用邏輯
 		onSettingsChange, // ADDED BACK
 		onTemplateListChange, // 新增回調，通知父組件模板列表已變更
+		onGenerateTemplateAI, // 新增：觸發 AI 生成的回調
 		systemPrompt = ''
 	} = $props<{
 		settings: RoleplaySettings
@@ -53,6 +55,7 @@
 		onApplyTemplate: (templateName: string) => void
 		onSettingsChange: (updatedSettings: RoleplaySettings) => void // ADDED BACK
 		onTemplateListChange: () => void // 新增回調
+		onGenerateTemplateAI: (description: string) => Promise<void> // 新增：接收描述並觸發生成
 		systemPrompt?: string
 	}>()
 
@@ -60,6 +63,7 @@
 	let templateNames = $state(roleplayService.getTemplateNames()) // 從 Service 獲取模板名稱
 	let selectedTemplate = $state('') // 用於下拉選單綁定
 	let newTemplateName = $state('') // 用於保存新模板的名稱輸入
+	let isGeneratingAI = $state(false) // 新增：用於顯示 AI 生成按鈕的加載狀態
 
 	// --- 函數 ---
 	/**
@@ -117,6 +121,27 @@
 			}
 		}
 	}
+
+	/** 處理 AI 生成模板請求 */
+	async function handleGenerateTemplateAI() {
+		const description = prompt(
+			'請輸入您想生成的角色基本描述（例如：一個住在未來都市的賽博龐克偵探）：',
+			''
+		)
+		if (description && description.trim()) {
+			isGeneratingAI = true
+			try {
+				await onGenerateTemplateAI(description.trim())
+				// 成功後，父元件會更新 settings，UI 會自動刷新
+				console.log('AI 模板生成請求已發送。')
+			} catch (error) {
+				console.error('AI 模板生成過程中發生錯誤:', error)
+				alert(`AI 模板生成失敗：${error instanceof Error ? error.message : '未知錯誤'}`)
+			} finally {
+				isGeneratingAI = false
+			}
+		}
+	}
 </script>
 
 <!-- 角色扮演設定面板 -->
@@ -148,6 +173,9 @@
 		<input type="text" bind:value={newTemplateName} placeholder="輸入新模板名稱..." />
 		<button onclick={handleSaveTemplate} disabled={!newTemplateName.trim()}>
 			將當前設定另存為模板
+		</button>
+		<button onclick={handleGenerateTemplateAI} disabled={isGeneratingAI || !isModelValid}>
+			{isGeneratingAI ? '生成中...' : '✨ AI 生成角色樣板'}
 		</button>
 	</div>
 

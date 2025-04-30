@@ -88,6 +88,101 @@
 		// 為了簡單起見，暫時不在這裡觸發保存。
 	}
 
+	/**
+	 * 使用 AI 根據使用者描述生成角色扮演模板設定
+	 * @param description 使用者輸入的角色描述
+	 */
+	async function generateTemplateAI(description: string) {
+		if (!isModelValid) {
+			alert('請先選擇一個有效的 Ollama 模型。')
+			throw new Error('無效的模型') // 拋出錯誤以便子元件處理 isGeneratingAI
+		}
+
+		loading = true // 可以共用 loading 狀態，或新增一個專用的狀態
+		fetchError = null
+		console.log(`請求 AI 生成模板，描述: ${description}`)
+
+		try {
+			// 建立一個臨時的 OllamaService 實例或直接使用現有的 service
+			// 這裡使用現有的 service，但確保模型和 URL 是最新的
+			const generatorLLM = ollamaService.createLLM() // 使用當前設定創建 LLM
+
+			// 設計 Prompt，要求 AI 輸出 JSON
+			const generationPrompt = `
+基於以下使用者描述，生成一個角色扮演模板設定。請嚴格按照指定的 JSON 格式回傳，不要包含任何額外的文字、註解或 markdown 格式標籤。
+
+使用者描述：
+"${description}"
+
+JSON 格式：
+{
+  "characterName": "角色名稱",
+  "characterRole": "角色身份",
+  "sceneDescription": "場景描述",
+  "scenarioDescription": "情境描述",
+  "systemPrompt": "額外系統指令"
+}
+
+請生成 JSON：
+`
+			// 呼叫 AI 模型
+			const aiResponse = await generatorLLM.invoke(generationPrompt)
+			console.log('AI 原始回應:', aiResponse)
+
+			// 嘗試解析 JSON
+			let generatedData: Omit<RoleplaySettings, 'isRoleplayMode'>
+			try {
+				// 清理可能的 markdown 代碼塊或其他非 JSON 字符
+				const jsonString = aiResponse.content
+					.toString()
+					.trim()
+					.replace(/^```json\s*/, '')
+					.replace(/```$/, '')
+					.trim()
+				generatedData = JSON.parse(jsonString)
+				console.log('解析後的 JSON:', generatedData)
+
+				// 驗證必要欄位是否存在 (可選，但建議)
+				if (
+					!generatedData.characterName ||
+					!generatedData.characterRole ||
+					!generatedData.sceneDescription ||
+					!generatedData.scenarioDescription ||
+					generatedData.systemPrompt === undefined // systemPrompt 可以是空字串
+				) {
+					throw new Error('AI 回傳的 JSON 缺少必要欄位。')
+				}
+
+				// 更新 roleplaySettings 狀態，保留 isRoleplayMode
+				roleplaySettings = {
+					...roleplaySettings, // 保留現有的 isRoleplayMode 等非模板相關設定
+					characterName: generatedData.characterName,
+					characterRole: generatedData.characterRole,
+					sceneDescription: generatedData.sceneDescription,
+					scenarioDescription: generatedData.scenarioDescription,
+					systemPrompt: generatedData.systemPrompt
+				}
+				console.log('已使用 AI 生成的內容更新 roleplaySettings:', roleplaySettings)
+			} catch (parseError) {
+				console.error('解析 AI 回應 JSON 時發生錯誤:', parseError)
+				console.error('無法解析的 AI 回應內容:', aiResponse.content)
+				alert(
+					`無法解析 AI 生成的內容。請檢查模型的輸出或稍後再試。\n錯誤: ${
+						parseError instanceof Error ? parseError.message : '未知解析錯誤'
+					}`
+				)
+				throw new Error('AI 回應解析失敗') // 拋出錯誤
+			}
+		} catch (error) {
+			console.error('呼叫 AI 生成模板時發生錯誤:', error)
+			fetchError = `AI 生成模板失敗：${error instanceof Error ? error.message : '未知錯誤'}`
+			alert(fetchError) // 提示使用者
+			throw error // 重新拋出錯誤，讓子元件知道失敗了
+		} finally {
+			loading = false
+		}
+	}
+
 	// 驗證選擇的模型是否有效
 	function validateModel() {
 		isModelValid = availableModels.includes(selectedModel)
@@ -299,6 +394,7 @@
 				console.log('Template list changed in child component.')
 			}}
 			onSettingsChange={handleSettingsChange}
+			onGenerateTemplateAI={generateTemplateAI}
 			systemPrompt={roleplayService.generateSystemPrompt()}
 		/>
 	{/if}
