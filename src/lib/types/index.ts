@@ -18,6 +18,7 @@ export interface RoleplaySettings {
 	scenarioDescription: string
 	systemPrompt: string
 	isRoleplayMode: boolean
+	avatarBase64?: string // 新增：AI 頭像的 Base64 字串 (可選)
 }
 
 // 模型設定介面

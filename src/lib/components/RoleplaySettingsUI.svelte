@@ -18,6 +18,7 @@
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
 	import { RoleplayService } from '$lib/services/RoleplayService' // 引入 Service 以便調用方法
+	import imageCompression from 'browser-image-compression' // 新增：匯入圖片壓縮庫
 
 	/**
 	 * 元件屬性
@@ -64,6 +65,7 @@
 	let selectedTemplate = $state('') // 用於下拉選單綁定
 	let newTemplateName = $state('') // 用於保存新模板的名稱輸入
 	let isGeneratingAI = $state(false) // 新增：用於顯示 AI 生成按鈕的加載狀態
+	let isUploadingImage = $state(false) // 新增：用於顯示圖片上傳狀態
 
 	// --- 函數 ---
 	/**
@@ -142,6 +144,60 @@
 			}
 		}
 	}
+
+	/** 處理圖片上傳 */
+	async function handleImageUpload(event: Event) {
+		const target = event.target as HTMLInputElement
+		const file = target.files?.[0]
+
+		if (!file) return
+
+		isUploadingImage = true
+		console.log(`原始圖片大小: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
+
+		const options = {
+			maxSizeMB: 0.5, // 最大檔案大小 (MB) - 調整此值以平衡品質和大小
+			maxWidthOrHeight: 300, // 最大寬度或高度 (像素)
+			useWebWorker: true,
+			initialQuality: 0.7 // 初始壓縮品質 (0-1)
+		}
+
+		try {
+			const compressedFile = await imageCompression(file, options)
+			console.log(`壓縮後圖片大小: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`)
+
+			const reader = new FileReader()
+			reader.onloadend = () => {
+				const base64String = reader.result as string
+				// 更新父元件狀態
+				updateSetting('avatarBase64', base64String)
+				isUploadingImage = false
+			}
+			reader.onerror = (error) => {
+				console.error('讀取壓縮圖片時發生錯誤:', error)
+				alert('讀取圖片失敗。')
+				isUploadingImage = false
+			}
+			reader.readAsDataURL(compressedFile)
+		} catch (error) {
+			console.error('圖片壓縮失敗:', error)
+			alert(`圖片壓縮失敗：${error instanceof Error ? error.message : '未知錯誤'}`)
+			isUploadingImage = false
+		} finally {
+			// 清空 input value 允許再次選擇同一個檔案
+			target.value = ''
+		}
+	}
+
+	/** 處理圖片載入錯誤，設置為預設圖標 */
+	function handleImageError(event: Event) { // 簡化類型，讓 Svelte 推斷
+		console.warn('頭像圖片載入失敗，使用預設圖標。')
+		// 使用類型斷言來訪問 src
+		const imgElement = event.currentTarget as HTMLImageElement
+		imgElement.src = '/favicon.png'
+		// 可選：移除 onerror 處理器，避免無限循環（如果預設圖標也載入失敗）
+		// event.currentTarget.onerror = null; // 在 Svelte 中通常不需要手動移除
+	}
 </script>
 
 <!-- 角色扮演設定面板 -->
@@ -181,6 +237,45 @@
 
 	<!-- 角色扮演設定表單 -->
 	<div class="settings-grid">
+		<!-- 頭像上傳與預覽 -->
+		<div class="avatar-section">
+			<label for="avatar-upload">AI 頭像：</label>
+			<div class="avatar-controls">
+				<img
+					src={settings.avatarBase64 || '/favicon.png'}
+					alt="AI 頭像預覽"
+					class="avatar-preview"
+					onerror={handleImageError}
+				/>
+				<input
+					type="file"
+					id="avatar-upload"
+					accept="image/*"
+					onchange={handleImageUpload}
+					style="display: none;"
+					disabled={isUploadingImage}
+				/>
+				<button
+					class="upload-button"
+					onclick={() => document.getElementById('avatar-upload')?.click()}
+					disabled={isUploadingImage}
+				>
+					{isUploadingImage ? '上傳中...' : '選擇圖片'}
+				</button>
+				{#if settings.avatarBase64}
+					<button
+						class="remove-button"
+						onclick={() => updateSetting('avatarBase64', undefined)}
+						disabled={isUploadingImage}
+						title="移除頭像"
+					>
+						❌
+					</button>
+				{/if}
+			</div>
+			<small>建議使用方形圖片，將自動壓縮至 300x300px 以下。</small>
+		</div>
+
 		<!-- 角色名稱設定 -->
 		<label>
 			角色名稱：
@@ -324,14 +419,79 @@
 		}
 	}
 
+	.avatar-section {
+		grid-column: 1 / -1; /* 讓頭像區塊橫跨所有欄位 */
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-bottom: 10px; /* 與下方設定保持間距 */
+
+		& label {
+			font-weight: bold;
+			color: var(--text-color);
+		}
+
+		& .avatar-controls {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+
+		& .avatar-preview {
+			width: 60px;
+			height: 60px;
+			border-radius: 50%;
+			object-fit: cover;
+			border: 1px solid var(--border-color);
+			background-color: var(--input-bg); /* 背景色以防圖片透明 */
+		}
+
+		& .upload-button,
+		& .remove-button {
+			padding: 5px 10px;
+			font-size: 0.9em;
+			background-color: var(--message-user-bg);
+			color: var(--text-color);
+			border: 1px solid var(--border-color);
+			border-radius: 4px;
+			cursor: pointer;
+			transition: background-color 0.2s;
+
+			&:hover:not(:disabled) {
+				background-color: var(--primary-color);
+				color: white;
+			}
+			&:disabled {
+				opacity: 0.6;
+				cursor: not-allowed;
+			}
+		}
+		& .remove-button {
+			background-color: transparent;
+			border: none;
+			font-size: 1.2em;
+			padding: 0 5px;
+			&:hover:not(:disabled) {
+				background-color: rgba(255, 0, 0, 0.1);
+			}
+		}
+
+		& small {
+			font-size: 0.8em;
+			color: var(--secondary-text-color);
+		}
+	}
+
 	.settings-grid {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		/* grid-template-columns: 1fr 1fr; */ /* 頭像區塊已橫跨，這裡可以調整或移除 */
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* 改為自動適應欄位 */
 		gap: 15px;
 
-		@media (max-width: 600px) {
+		/* @media (max-width: 600px) {
 			grid-template-columns: 1fr;
-		}
+		} */ /* auto-fit 已處理響應式 */
+		/* } */ /* 移除多餘的括號 */
 
 		& label {
 			display: flex;

@@ -67,7 +67,8 @@ export class RoleplayService {
 			sceneDescription: '',
 			scenarioDescription: '',
 			systemPrompt: '',
-			isRoleplayMode: false
+			isRoleplayMode: false,
+			avatarBase64: undefined // 新增：初始化頭像為 undefined
 		};
 		this.templates = {}; // 初始化為空物件
 

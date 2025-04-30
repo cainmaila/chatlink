@@ -415,6 +415,7 @@ JSON 格式：
 		{loading}
 		isRoleplayMode={roleplaySettings.isRoleplayMode}
 		characterName={roleplaySettings.characterName}
+		avatarBase64={roleplaySettings.avatarBase64}
 	/>
 
 	<InputArea
