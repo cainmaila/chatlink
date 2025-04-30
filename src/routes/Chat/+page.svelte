@@ -6,7 +6,8 @@
 	import MessageList from '$lib/components/MessageList.svelte'
 	import InputArea from '$lib/components/InputArea.svelte'
 	import ModelSettings from '$lib/components/ModelSettings.svelte'
-	import RoleplaySettings from '$lib/components/RoleplaySettings.svelte'
+	import RoleplaySettingsUI from '$lib/components/RoleplaySettingsUI.svelte'
+	import type { RoleplaySettings } from '$lib/types'
 
 	// --- State ---
 	let messages = $state<ChatMessage[]>([])
@@ -31,19 +32,17 @@
 	// 生成系統提示詞 - 不再使用 $derived，將在 sendMessage 中即時生成
 	// let fullSystemPrompt = $derived(roleplayService.generateSystemPrompt())
 	let previousSystemPrompt = $state('') // 仍然可以用於比較，但不再觸發 message 清除
+	// let previousRoleplaySettings = $state<RoleplaySettings | null>(null); // REMOVED - No longer needed with event handler
 
 	// 注意：不再使用 $derived 創建 LLM，因為在發送消息時會直接創建最新的實例
-	// 移除 $effect 和 updateSystemPromptInMessages，因為 startRoleplay 和 sendMessage 會處理提示詞
 
 	// --- Effects ---
 	onMount(() => {
+		// previousRoleplaySettings = JSON.parse(JSON.stringify(roleplaySettings)); // REMOVED
 		fetchModels()
 	})
 
-	// 當 roleplaySettings 改變時，儲存設定
-	$effect(() => {
-		roleplayService.saveSettings(roleplaySettings)
-	})
+	// REMOVED $effect for handling settings changes, will use handleSettingsChange function instead
 
 	// --- Functions ---
 	async function fetchModels() {
@@ -71,6 +70,88 @@
 			loading = false
 		}
 	}
+
+	/**
+	 * 處理 RoleplaySettings 元件回傳的設定變更
+	 * @param eventData - 從子元件傳來的事件數據
+	 */
+	function handleSettingsChange(eventData: unknown) {
+		// 接收為 unknown
+		const newSettings = eventData as RoleplaySettings // 強制轉換為 RoleplaySettings
+
+		// 獲取變更前的狀態 (直接從當前的 roleplaySettings，因為它還沒被 newSettings 更新)
+		const previousSettings = JSON.parse(JSON.stringify(roleplaySettings))
+		const wasRoleplayMode = previousSettings.isRoleplayMode
+		const isNowRoleplayMode = newSettings.isRoleplayMode
+		const roleDetailsChanged =
+			previousSettings.characterName !== newSettings.characterName ||
+			previousSettings.characterRole !== newSettings.characterRole ||
+			previousSettings.sceneDescription !== newSettings.sceneDescription ||
+			previousSettings.scenarioDescription !== newSettings.scenarioDescription ||
+			previousSettings.systemPrompt !== newSettings.systemPrompt
+
+		console.log('handleSettingsChange triggered. New settings:', newSettings)
+		console.log('Current messages length:', messages.length)
+		console.log(
+			'Was roleplay:',
+			wasRoleplayMode,
+			'Is now roleplay:',
+			isNowRoleplayMode,
+			'Details changed:',
+			roleDetailsChanged
+		)
+
+		// 情況 1: 從非角色扮演模式切換到角色扮演模式
+		if (!wasRoleplayMode && isNowRoleplayMode) {
+			console.log('Case 1: Enabling roleplay mode.')
+			roleplaySettings = newSettings // 更新父元件狀態
+			startRoleplay() // 使用 startRoleplay 處理初始化
+			return
+		}
+
+		// 情況 2: 角色扮演模式下，角色細節發生變化
+		if (wasRoleplayMode && isNowRoleplayMode && roleDetailsChanged) {
+			console.log('Case 2: Role details changed while in roleplay mode.')
+			if (messages.length > 1) {
+				console.log('History exists, prompting user.')
+				if (confirm('修改角色設定將清除所有現有對話歷史，確定要繼續嗎？')) {
+					console.log('User confirmed history clear.')
+					roleplaySettings = newSettings // 更新父元件狀態
+					startRoleplay() // 調用 startRoleplay 處理重置
+				} else {
+					console.log('User cancelled history clear. Settings remain unchanged.')
+					// 如果用戶取消，父元件的 roleplaySettings 維持不變，子元件的顯示會自動恢復
+				}
+			} else {
+				console.log('No significant history, applying changes and restarting.')
+				roleplaySettings = newSettings // 更新父元件狀態
+				startRoleplay()
+			}
+			return
+		}
+
+		// 情況 3: 從角色扮演模式切換到非角色扮演模式 (由按鈕觸發 closeRoleplay)
+		// isNowRoleplayMode 為 false 的情況不應由此觸發
+
+		// 情況 4: 其他情況 (未改變角色細節或 isRoleplayMode)
+		if (isNowRoleplayMode === wasRoleplayMode && !roleDetailsChanged) {
+			console.log('Case 4: Minor settings changed, only updating state.')
+			roleplaySettings = newSettings // 更新父元件狀態
+			// 不需要調用 startRoleplay 或 closeRoleplay
+		} else if (isNowRoleplayMode === wasRoleplayMode && roleDetailsChanged) {
+			// 這部分邏輯已在情況 2 處理
+		} else {
+			// 捕捉未預期的狀態轉換
+			console.warn('Unhandled case in handleSettingsChange:', {
+				wasRoleplayMode,
+				isNowRoleplayMode,
+				roleDetailsChanged
+			})
+			roleplaySettings = newSettings // 默認更新狀態
+		}
+		// 保存設定的操作由 $effect 處理
+	}
+
 	// 驗證選擇的模型是否有效
 	function validateModel() {
 		isModelValid = availableModels.includes(selectedModel)
@@ -105,13 +186,27 @@
 			// clearMessages()
 		}
 
-		const newSettings = roleplayService.applyTemplate(template)
-		roleplaySettings = newSettings
+		const newSettings = roleplayService.applyTemplate(template) // 可能返回 null
+		if (newSettings) {
+			// 檢查 newSettings 是否有效
+			roleplaySettings = newSettings // 只有在有效時才賦值
 
-		// 如果已經在角色扮演模式，自動重新開始對話
+			// 如果已經在角色扮演模式，自動重新開始對話
+			if (roleplaySettings.isRoleplayMode) {
+				startRoleplay()
+			}
+		} else {
+			// 可選：處理模板不存在的情況，例如顯示錯誤訊息
+			console.error(`無法套用模板 "${template}"，模板不存在。`)
+			// 這裡可以添加用戶提示，例如使用 alert() 或其他 UI 元素
+		}
+
+		// 原有的 if 判斷移到 newSettings 檢查內部
+		/*
 		if (roleplaySettings.isRoleplayMode) {
 			startRoleplay()
 		}
+		*/ // <-- 補上註解結尾
 	}
 
 	// 清除對話歷史 - 簡化為完全清空
@@ -256,103 +351,18 @@
 	</h1>
 
 	{#if showRoleplaySettings}
-		<RoleplaySettings
+		<RoleplaySettingsUI
 			settings={roleplaySettings}
 			{isModelValid}
+			{roleplayService}
 			onStartRoleplay={startRoleplay}
 			onCloseRoleplay={closeRoleplay}
 			onApplyTemplate={applyTemplate}
-			onSettingsChange={(newSettings) => {
-				const wasRoleplayMode = roleplaySettings.isRoleplayMode
-				const isNowRoleplayMode = newSettings.isRoleplayMode
-				const roleDetailsChanged =
-					roleplaySettings.characterName !== newSettings.characterName ||
-					roleplaySettings.characterRole !== newSettings.characterRole ||
-					roleplaySettings.sceneDescription !== newSettings.sceneDescription ||
-					roleplaySettings.scenarioDescription !== newSettings.scenarioDescription ||
-					roleplaySettings.systemPrompt !== newSettings.systemPrompt
-
-				// 處理設定變更的核心邏輯
-				const processSettingsChange = () => {
-					console.log('onSettingsChange triggered. New settings:', newSettings)
-					console.log('Current messages length:', messages.length)
-					console.log(
-						'Was roleplay:',
-						wasRoleplayMode,
-						'Is now roleplay:',
-						isNowRoleplayMode,
-						'Details changed:',
-						roleDetailsChanged
-					)
-
-					// 情況 1: 從非角色扮演模式切換到角色扮演模式
-					if (!wasRoleplayMode && isNowRoleplayMode) {
-						console.log('Case 1: Enabling roleplay mode.')
-						roleplaySettings = newSettings // 先更新設定，讓 startRoleplay 能讀取到
-						startRoleplay() // 使用 startRoleplay 處理初始化
-						return
-					}
-
-					// 情況 2: 角色扮演模式下，角色細節發生變化
-					if (wasRoleplayMode && isNowRoleplayMode && roleDetailsChanged) {
-						console.log('Case 2: Role details changed while in roleplay mode.')
-						// 檢查是否有 user/ai 訊息 (messages[0] 通常是 system prompt)
-						if (messages.length > 1) {
-							console.log('History exists, prompting user.')
-							if (confirm('修改角色設定將清除所有現有對話歷史，確定要繼續嗎？')) {
-								console.log('User confirmed history clear.')
-								roleplaySettings = newSettings // 更新設定
-								startRoleplay() // 調用 startRoleplay 處理重置
-							} else {
-								console.log('User cancelled history clear.')
-								// 如果用戶取消，則不做任何事，設定維持不變
-							}
-						} else {
-							// 如果沒有對話歷史 (只有 system prompt 或為空)，直接應用新設定並重新開始
-							console.log('No significant history, applying changes and restarting.')
-							roleplaySettings = newSettings
-							startRoleplay()
-						}
-						return
-					}
-
-					// 情況 3: 從角色扮演模式切換到非角色扮演模式
-					// 這個應該由 RoleplaySettings 元件內部的 "關閉角色扮演" 按鈕觸發 onCloseRoleplay 回調處理，
-					// onSettingsChange 不應該處理 isNowRoleplayMode 為 false 的情況，除非是保存非角色扮演模式下的設定。
-					if (wasRoleplayMode && !isNowRoleplayMode) {
-						console.warn(
-							'Case 3: Attempting to disable roleplay via onSettingsChange? This should be handled by onCloseRoleplay.'
-						)
-						// 為保險起見，僅保存設定，但不調用 closeRoleplay (避免重複確認)
-						roleplaySettings = newSettings
-						roleplayService.saveSettings(roleplaySettings)
-						return
-					}
-
-					// 情況 4: 其他情況（例如，僅改變 isRoleplayMode 但未觸發情況1，或未改變角色細節）
-					// 只更新和保存設定，不重置對話 (除非是從 false -> true，已在情況1處理)
-					if (isNowRoleplayMode === wasRoleplayMode) {
-						console.log(
-							'Case 4: Settings changed, but no roleplay state change or major detail change requiring reset.'
-						)
-						roleplaySettings = newSettings
-						roleplayService.saveSettings(roleplaySettings)
-						// 如果只是在非角色扮演模式下修改了某些欄位，保存即可
-						// 如果在角色扮演模式下修改了非角色細節的欄位（例如溫度等，如果有的話），也只保存
-					} else {
-						// 捕捉未預期的狀態轉換
-						console.warn('Unhandled case in onSettingsChange:', {
-							wasRoleplayMode,
-							isNowRoleplayMode,
-							roleDetailsChanged
-						})
-						roleplaySettings = newSettings // 默認保存設定
-						roleplayService.saveSettings(roleplaySettings)
-					}
-				}
-
-				processSettingsChange()
+			onTemplateListChange={() => {
+				// 模板列表變化時的回調 (目前僅 log)
+				console.log('Template list changed in child component.')
 			}}
+			onSettingsChange={handleSettingsChange}
 			systemPrompt={roleplayService.generateSystemPrompt()}
 		/>
 	{/if}

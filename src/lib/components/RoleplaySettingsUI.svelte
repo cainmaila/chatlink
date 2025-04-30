@@ -17,35 +17,51 @@
 -->
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
+	import { RoleplayService } from '$lib/services/RoleplayService' // 引入 Service 以便調用方法
 
 	/**
 	 * 元件屬性
 	 * @prop {RoleplaySettings} settings - 角色扮演設定對象
 	 * @prop {boolean} [isModelValid=true] - 模型是否有效
+	 * @prop {RoleplayService} roleplayService - 角色扮演服務實例 (用於模板管理)
 	 * @prop {function} onStartRoleplay - 開始/重新開始角色扮演的回調函數
 	 * @prop {function} onCloseRoleplay - 關閉角色扮演的回調函數
-	 * @prop {function} onApplyTemplate - 應用角色扮演模板的回調函數
-	 * @prop {function} onSettingsChange - 設定變更時的回調函數
+	 * @prop {function} onApplyTemplate - 應用角色扮演模板的回調函數 (父組件處理)
+	 * @prop {function} onTemplateListChange - 模板列表變更時的回調 (通知父組件刷新列表)
+	 * @prop {function} onApplyTemplate - 應用角色扮演模板的回調函數 (父組件處理)
+	 * @prop {function} onSettingsChange - 設定變更時的回調函數 (父組件處理)
+	 * @prop {function} onTemplateListChange - 模板列表變更時的回調 (通知父組件刷新列表)
 	 * @prop {string} [systemPrompt=''] - 系統提示詞，用於預覽
 	 */
 	const {
-		settings,
+		// Back to const
+		settings, // No longer bindable
 		isModelValid = true,
+		roleplayService, // 接收 Service 實例
 		onStartRoleplay,
 		onCloseRoleplay,
-		onApplyTemplate,
-		onSettingsChange,
+		onApplyTemplate, // 父組件處理套用邏輯
+		onSettingsChange, // ADDED BACK
+		onTemplateListChange, // 新增回調，通知父組件模板列表已變更
 		systemPrompt = ''
 	} = $props<{
 		settings: RoleplaySettings
 		isModelValid?: boolean
+		roleplayService: RoleplayService // 必須傳入
 		onStartRoleplay: () => void
 		onCloseRoleplay: () => void
-		onApplyTemplate: (template: string) => void
-		onSettingsChange: (updatedSettings: RoleplaySettings) => void
+		onApplyTemplate: (templateName: string) => void
+		onSettingsChange: (updatedSettings: RoleplaySettings) => void // ADDED BACK
+		onTemplateListChange: () => void // 新增回調
 		systemPrompt?: string
 	}>()
 
+	// --- 本地元件狀態 ---
+	let templateNames = $state(roleplayService.getTemplateNames()) // 從 Service 獲取模板名稱
+	let selectedTemplate = $state('') // 用於下拉選單綁定
+	let newTemplateName = $state('') // 用於保存新模板的名稱輸入
+
+	// --- 函數 ---
 	/**
 	 * 處理設定值的更新
 	 * 更新特定設定屬性並通知父組件
@@ -53,10 +69,53 @@
 	 * @param {any} value - 新的設定值
 	 */
 	function updateSetting(key: keyof RoleplaySettings, value: any) {
-		onSettingsChange({
+		// 創建一個新的設定物件傳遞給父元件
+		const updatedSettings: RoleplaySettings = {
 			...settings,
 			[key]: value
-		})
+		}
+		onSettingsChange(updatedSettings) // 觸發回調
+	}
+
+	// --- 事件處理 ---
+
+	/** 處理保存模板 */
+	function handleSaveTemplate() {
+		if (!newTemplateName.trim()) return
+		// 從當前 settings 提取模板相關部分
+		const { isRoleplayMode, ...templateSettings } = settings
+		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings)
+		if (success) {
+			console.log(`模板 "${newTemplateName.trim()}" 已保存。`)
+			const savedName = newTemplateName.trim() // 保存名稱以便後續使用
+			newTemplateName = '' // 清空輸入框
+			templateNames = roleplayService.getTemplateNames() // 更新模板列表狀態
+			selectedTemplate = savedName // 自動選中剛保存的模板
+			onTemplateListChange() // 通知父組件列表已更新 (如果父組件需要響應)
+		} else {
+			// 可以添加錯誤提示
+			console.error(`無法保存模板 "${newTemplateName.trim()}"。`)
+		}
+	}
+
+	/** 處理刪除模板 */
+	function handleDeleteTemplate() {
+		if (!selectedTemplate) return
+		if (confirm(`確定要刪除模板 "${selectedTemplate}" 嗎？此操作無法復原。`)) {
+			const success = roleplayService.deleteTemplate(selectedTemplate)
+			if (success) {
+				console.log(`模板 "${selectedTemplate}" 已刪除。`)
+				const deletedTemplateName = selectedTemplate
+				templateNames = roleplayService.getTemplateNames() // 更新模板列表狀態
+				// 如果刪除的是當前選中的，清空選中狀態
+				if (selectedTemplate === deletedTemplateName) {
+					selectedTemplate = ''
+				}
+				onTemplateListChange() // 通知父組件列表已更新
+			} else {
+				console.error(`無法刪除模板 "${selectedTemplate}"。`)
+			}
+		}
 	}
 </script>
 
@@ -64,13 +123,32 @@
 <div class="roleplay-settings">
 	<h2>角色扮演設定</h2>
 
-	<!-- 預設模板選擇區域 -->
-	<div class="template-buttons">
-		<span>快速模板：</span>
-		<button onclick={() => onApplyTemplate('fantasy-adventure')}>奇幻冒險</button>
-		<button onclick={() => onApplyTemplate('sci-fi')}>科幻太空</button>
-		<button onclick={() => onApplyTemplate('detective')}>偵探推理</button>
-		<button onclick={() => onApplyTemplate('historical')}>歷史探索</button>
+	<!-- 動態模板選擇區域 -->
+	<div class="template-management">
+		<label for="template-select">選擇模板：</label>
+		<select id="template-select" bind:value={selectedTemplate}>
+			<option value="">-- 請選擇模板 --</option>
+			{#each templateNames as name}
+				<option value={name}>{name}</option>
+			{/each}
+		</select>
+		<button
+			onclick={() => selectedTemplate && onApplyTemplate(selectedTemplate)}
+			disabled={!selectedTemplate}
+		>
+			套用選定模板
+		</button>
+		<button class="delete-button" onclick={handleDeleteTemplate} disabled={!selectedTemplate}>
+			刪除選定模板
+		</button>
+	</div>
+
+	<!-- 保存當前設定為模板 -->
+	<div class="template-save">
+		<input type="text" bind:value={newTemplateName} placeholder="輸入新模板名稱..." />
+		<button onclick={handleSaveTemplate} disabled={!newTemplateName.trim()}>
+			將當前設定另存為模板
+		</button>
 	</div>
 
 	<!-- 角色扮演設定表單 -->
@@ -167,29 +245,52 @@
 		}
 	}
 
-	.template-buttons {
+	.template-management,
+	.template-save {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
+		gap: 10px;
 		margin-bottom: 15px;
 		align-items: center;
+		flex-wrap: wrap; /* 允許換行 */
 
-		& span {
+		& label {
 			color: var(--text-color);
+		}
+
+		& select,
+		& input[type='text'] {
+			padding: 6px;
+			border: 1px solid var(--border-color);
+			border-radius: 4px;
+			background-color: var(--input-bg);
+			color: var(--text-color);
+			flex-grow: 1; /* 讓輸入框填滿空間 */
+			min-width: 150px; /* 最小寬度 */
 		}
 
 		& button {
 			padding: 6px 12px;
-			background-color: var(--message-ai-bg);
+			background-color: var(--message-user-bg); /* 區分按鈕顏色 */
 			color: var(--text-color);
 			border: 1px solid var(--border-color);
-			border-radius: 12px;
-			font-size: 0.9em;
+			border-radius: 4px;
 			cursor: pointer;
 			transition: background-color 0.2s;
+			white-space: nowrap; /* 防止按鈕文字換行 */
 
-			&:hover {
+			&:hover:not(:disabled) {
 				background-color: var(--primary-color);
+				color: white;
+			}
+			&:disabled {
+				opacity: 0.6;
+				cursor: not-allowed;
+			}
+		}
+		& .delete-button {
+			background-color: var(--error-color-secondary); /* 刪除按鈕用不同顏色 */
+			&:hover:not(:disabled) {
+				background-color: var(--error-color);
 				color: white;
 			}
 		}

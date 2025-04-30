@@ -7,7 +7,7 @@ export interface ChatMessage {
 // Ollama 模型介面
 export interface OllamaModel {
 	name: string
-	[key: string]: any // 其他可能的屬性
+	[key: string]: unknown // 其他可能的屬性
 }
 
 // 角色扮演設定介面
