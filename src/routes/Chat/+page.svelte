@@ -80,7 +80,6 @@
 		// 不再根據設定變更觸發 startRoleplay 或 closeRoleplay。
 		// 這些操作由專門的按鈕（開始、關閉、套用模板）觸發。
 
-		console.log('handleSettingsChange triggered. Updating parent state with:', newSettings)
 		roleplaySettings = newSettings // 直接更新父元件的狀態
 
 		// 注意：保存設定到 localStorage 的操作現在由 RoleplayService 內部處理，
@@ -100,7 +99,6 @@
 
 		loading = true // 可以共用 loading 狀態，或新增一個專用的狀態
 		fetchError = null
-		console.log(`請求 AI 生成模板，描述: ${description}`)
 
 		try {
 			// 建立一個臨時的 OllamaService 實例或直接使用現有的 service
@@ -127,7 +125,6 @@ JSON 格式：
 `
 			// 呼叫 AI 模型
 			const aiResponse = await generatorLLM.invoke(generationPrompt)
-			console.log('AI 原始回應:', aiResponse)
 
 			// 嘗試解析 JSON
 			let generatedData: Omit<RoleplaySettings, 'isRoleplayMode'>
@@ -140,7 +137,6 @@ JSON 格式：
 					.replace(/```$/, '')
 					.trim()
 				generatedData = JSON.parse(jsonString)
-				console.log('解析後的 JSON:', generatedData)
 
 				// 驗證必要欄位是否存在 (可選，但建議)
 				if (
@@ -162,7 +158,6 @@ JSON 格式：
 					scenarioDescription: generatedData.scenarioDescription,
 					systemPrompt: generatedData.systemPrompt
 				}
-				console.log('已使用 AI 生成的內容更新 roleplaySettings:', roleplaySettings)
 			} catch (parseError) {
 				console.error('解析 AI 回應 JSON 時發生錯誤:', parseError)
 				console.error('無法解析的 AI 回應內容:', aiResponse.content)
@@ -243,27 +238,22 @@ JSON 格式：
 	// 清除對話歷史 - 簡化為完全清空
 	function clearMessages() {
 		messages = []
-		console.log('clearMessages executed. Messages cleared.')
 	}
 
 	// 開始新的角色扮演對話 - 強化初始化邏輯
 	function startRoleplay() {
 		// 1. 確保 isRoleplayMode 為 true (可能已被 onSettingsChange 或 applyTemplate 設置)
 		roleplaySettings.isRoleplayMode = true
-		console.log('Ensured roleplay mode is true.')
 
 		// 2. **先保存**當前設定到 Service，確保 Service 內部狀態最新
 		//    這樣後續 generateSystemPrompt 就會使用最新的設定
 		roleplayService.saveSettings(roleplaySettings)
-		console.log('Saved current roleplaySettings to service.')
 
 		// 3. 生成最新的系統提示詞 (現在基於 Service 最新的內部狀態)
 		const newSystemPrompt = roleplayService.generateSystemPrompt()
-		console.log('Starting roleplay with prompt:', newSystemPrompt)
 
 		// 4. 重新初始化 OllamaService
 		ollamaService = new OllamaService(ollamaBaseUrl, selectedModel)
-		console.log('OllamaService re-initialized.')
 
 		// 5. 徹底清空消息歷史
 		clearMessages()
@@ -278,7 +268,6 @@ JSON 格式：
 			initialMessages.push(welcomeMessage)
 		}
 		messages = initialMessages
-		console.log('After startRoleplay initialization, messages:', JSON.stringify(messages))
 
 		// 7. 關閉設定面板
 		showRoleplaySettings = false
@@ -301,7 +290,6 @@ JSON 格式：
 
 		// 徹底清空消息歷史
 		clearMessages()
-		console.log('Roleplay closed. Messages cleared.')
 	}
 
 	// 切換是否顯示角色扮演設定面板
@@ -326,7 +314,6 @@ JSON 格式：
 			// 在角色扮演模式下，確保使用最新的系統提示詞
 			if (roleplaySettings.isRoleplayMode) {
 				const currentSystemPrompt = roleplayService.generateSystemPrompt() // <-- 即時生成
-				console.log('sendMessage: Using system prompt:', currentSystemPrompt) // <-- 使用即時生成的提示詞
 				// 移除現有的系統提示詞（如果有）
 				historyMessages = historyMessages.filter((msg: ChatMessage) => msg.role !== 'system')
 				// 將最新的系統提示詞添加到歷史記錄的開頭
@@ -391,7 +378,6 @@ JSON 格式：
 			onApplyTemplate={applyTemplate}
 			onTemplateListChange={() => {
 				// 模板列表變化時的回調 (目前僅 log)
-				console.log('Template list changed in child component.')
 			}}
 			onSettingsChange={handleSettingsChange}
 			onGenerateTemplateAI={generateTemplateAI}

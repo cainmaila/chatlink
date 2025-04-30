@@ -1,4 +1,4 @@
-｀<!--
+<!--
 @component
 @name RoleplaySettings
 @description 角色扮演設定元件，提供角色扮演相關參數配置和模板選擇
@@ -74,10 +74,8 @@
 	$effect(() => {
 		// 只有在沒有選擇模板預覽時，才用外部 settings 更新本地狀態
 		if (!selectedTemplate) {
-			console.log("External settings changed, updating localSettings:", settings);
 			localSettings = JSON.parse(JSON.stringify(settings)); // Deep copy
 		} else {
-			console.log("External settings changed, but template is selected, not updating localSettings from props.");
 		}
 	});
 
@@ -87,7 +85,6 @@
 		if (selectedTemplate) {
 			const templateData = roleplayService.getTemplate(selectedTemplate);
 			if (templateData) {
-				console.log(`Previewing template: ${selectedTemplate}`, templateData);
 				// 更新本地狀態以預覽模板，保留 isRoleplayMode 和 avatarBase64
 				localSettings = {
 					...localSettings, // 保留 isRoleplayMode 和 avatarBase64
@@ -100,7 +97,6 @@
 			}
 		} else {
 			// 如果取消選擇模板，恢復到父元件傳入的 settings
-			console.log("Template deselected, reverting localSettings to props settings:", settings);
 			localSettings = JSON.parse(JSON.stringify(settings)); // Deep copy
 		}
 		// 預覽變化時，也通知父元件 (可選，取決於是否希望父元件知道預覽狀態)
@@ -123,13 +119,11 @@
 		};
 		// 同步通知父元件
 		onSettingsChange(localSettings);
-		console.log(`Local setting ${key} updated, notified parent.`);
 
 		// 如果使用者手動修改了欄位，且當前正在預覽某個模板，
 		// 可以考慮取消模板的選中狀態，因為表單內容不再是純粹的模板預覽了。
 		// if (selectedTemplate) {
 		//   selectedTemplate = ''; // 取消選中
-		//   console.log("User edited field while previewing, template deselected.");
 		// }
 	}
 
@@ -143,7 +137,6 @@
 		const { isRoleplayMode, avatarBase64, ...templateSettings } = localSettings; // 使用 localSettings
 		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings);
 		if (success) {
-			console.log(`模板 "${newTemplateName.trim()}" 已保存 (from local state)。`);
 			const savedName = newTemplateName.trim();
 			newTemplateName = '';
 			templateNames = roleplayService.getTemplateNames();
@@ -160,7 +153,6 @@
 		if (confirm(`確定要刪除模板 "${selectedTemplate}" 嗎？此操作無法復原。`)) {
 			const success = roleplayService.deleteTemplate(selectedTemplate)
 			if (success) {
-				console.log(`模板 "${selectedTemplate}" 已刪除。`)
 				const deletedTemplateName = selectedTemplate
 				templateNames = roleplayService.getTemplateNames() // 更新模板列表狀態
 				// 如果刪除的是當前選中的，清空選中狀態
@@ -169,7 +161,7 @@
 				}
 				onTemplateListChange() // 通知父組件列表已更新
 			} else {
-				console.error(`無法刪除模板 "${selectedTemplate}"。`)
+				console.error(`無法刪除模板 "${selectedTemplate}"。`);
 			}
 		}
 	}
@@ -185,7 +177,6 @@
 			try {
 				await onGenerateTemplateAI(description.trim())
 				// 成功後，父元件會更新 settings，UI 會自動刷新
-				console.log('AI 模板生成請求已發送。')
 			} catch (error) {
 				console.error('AI 模板生成過程中發生錯誤:', error)
 				alert(`AI 模板生成失敗：${error instanceof Error ? error.message : '未知錯誤'}`)
@@ -203,7 +194,6 @@
 		if (!file) return
 
 		isUploadingImage = true
-		console.log(`原始圖片大小: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
 
 		const options = {
 			maxSizeMB: 0.5, // 最大檔案大小 (MB) - 調整此值以平衡品質和大小
@@ -214,7 +204,6 @@
 
 		try {
 			const compressedFile = await imageCompression(file, options)
-			console.log(`壓縮後圖片大小: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`)
 
 			const reader = new FileReader()
 			reader.onloadend = () => {
@@ -241,7 +230,6 @@
 
 	/** 處理圖片載入錯誤，設置為預設圖標 */
 	function handleImageError(event: Event) { // 簡化類型，讓 Svelte 推斷
-		console.warn('頭像圖片載入失敗，使用預設圖標。')
 		// 使用類型斷言來訪問 src
 		const imgElement = event.currentTarget as HTMLImageElement
 		imgElement.src = '/favicon.png'
