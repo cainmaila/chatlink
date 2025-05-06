@@ -85,8 +85,9 @@
 	}
 
 	/** 處理角色扮演設定變更 */
-	function handleSettingsChange(newSettings: RoleplaySettings) {
-		roleplaySettings = newSettings
+	function handleSettingsChange(settings: RoleplaySettings) {
+		roleplaySettings = settings
+		// 確保儲存完整設定，包括頭像
 		roleplayService.saveSettings(roleplaySettings)
 	}
 
@@ -162,13 +163,14 @@
 		const newSettings = roleplayService.applyTemplate(template)
 		if (newSettings) {
 			roleplaySettings = newSettings
+			// 確保儲存完整設定，包括頭像
 			roleplayService.saveSettings(roleplaySettings)
 
 			if (roleplaySettings.isRoleplayMode) {
 				startRoleplay()
 			}
 		} else {
-			console.error(`無法套用模板 "${template}"，模板不存在。`)
+			console.error(`無法套用模板 "${template}"。`)
 		}
 	}
 

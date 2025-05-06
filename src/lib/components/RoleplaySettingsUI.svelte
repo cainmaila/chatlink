@@ -77,7 +77,8 @@
 			if (template) {
 				previewSettings = {
 					...settings,
-					...template
+					...template,
+					avatarBase64: template.avatarBase64 // 確保頭像被包含在預覽中
 				}
 			}
 		} else {
@@ -122,7 +123,7 @@
 			sceneDescription: previewSettings.sceneDescription,
 			scenarioDescription: previewSettings.scenarioDescription,
 			systemPrompt: previewSettings.systemPrompt,
-			avatarBase64: previewSettings.avatarBase64
+			avatarBase64: previewSettings.avatarBase64 // 確保頭像被保存到模板中
 		}
 
 		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings)

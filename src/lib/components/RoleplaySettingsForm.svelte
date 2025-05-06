@@ -6,6 +6,7 @@
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
 	import { compressImageToBase64, validateImage, handleImageError } from '$lib/utils/imageUtils'
+	import { onMount } from 'svelte'
 
 	const {
 		settings,
@@ -17,8 +18,8 @@
 		onSettingsChange: (key: keyof RoleplaySettings, value: any) => void
 	}>()
 
-	// 使用 $derived 替代原本的狀態
-	let displayedAvatarSrc = $derived(settings.avatarBase64)
+	// 使用 $derived 確保頭像即時更新
+	let displayedAvatarSrc = $derived(settings.avatarBase64 || '/favicon.png')
 	let hasAvatar = $derived(!!settings.avatarBase64)
 
 	/** 處理圖片上傳 */
@@ -46,7 +47,7 @@
 		<label for="avatar-upload">AI 頭像：</label>
 		<div class="avatar-controls">
 			<img
-				src={displayedAvatarSrc || '/favicon.png'}
+				src={displayedAvatarSrc}
 				alt="AI 頭像預覽"
 				class="avatar-preview"
 				onerror={handleImageError}

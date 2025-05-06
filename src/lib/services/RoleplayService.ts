@@ -87,10 +87,24 @@ export class RoleplayService {
 	 * 從 localStorage 載入角色扮演設定
 	 */
 	loadSettings(): RoleplaySettings {
-		const savedSettings = loadFromStorage(ROLEPLAY_SETTINGS_KEY, this.settings)
-		this.settings = {
-			...this.settings,
-			...savedSettings
+		const defaultSettings: RoleplaySettings = {
+			characterName: 'AI助手',
+			characterRole: '',
+			sceneDescription: '',
+			scenarioDescription: '',
+			systemPrompt: '',
+			isRoleplayMode: false,
+			avatarBase64: undefined
+		}
+
+		const savedSettings = loadFromStorage<RoleplaySettings>(ROLEPLAY_SETTINGS_KEY, defaultSettings)
+		if (savedSettings) {
+			// 確保所有必要欄位都存在
+			this.settings = {
+				...defaultSettings,
+				...savedSettings,
+				avatarBase64: savedSettings.avatarBase64 || undefined
+			}
 		}
 		return deepClone(this.settings)
 	}
@@ -99,8 +113,12 @@ export class RoleplayService {
 	 * 儲存角色扮演設定到 localStorage
 	 */
 	saveSettings(settings: RoleplaySettings) {
-		this.settings = settings
-		saveToStorage(ROLEPLAY_SETTINGS_KEY, settings)
+		// 確保在儲存時保留頭像
+		this.settings = {
+			...settings,
+			avatarBase64: settings.avatarBase64
+		}
+		saveToStorage(ROLEPLAY_SETTINGS_KEY, this.settings)
 	}
 
 	/**
