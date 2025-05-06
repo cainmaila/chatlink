@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
-	import imageCompression from 'browser-image-compression'
+	import { compressImageToBase64, validateImage, handleImageError } from '$lib/utils/imageUtils'
 
 	const {
 		settings,
@@ -27,33 +27,16 @@
 		const file = target.files?.[0]
 		if (!file) return
 
-		const options = {
-			maxSizeMB: 0.5,
-			maxWidthOrHeight: 300,
-			useWebWorker: true,
-			initialQuality: 0.7
-		}
-
 		try {
-			const compressedFile = await imageCompression(file, options)
-			const reader = new FileReader()
-			reader.onloadend = () => {
-				const base64String = reader.result as string
-				onSettingsChange('avatarBase64', base64String)
-			}
-			reader.readAsDataURL(compressedFile)
+			validateImage(file)
+			const base64String = await compressImageToBase64(file)
+			onSettingsChange('avatarBase64', base64String)
 		} catch (error) {
-			console.error('圖片壓縮失敗:', error)
-			alert(`圖片壓縮失敗：${error instanceof Error ? error.message : '未知錯誤'}`)
+			console.error('圖片處理失敗:', error)
+			alert(error instanceof Error ? error.message : '未知錯誤')
 		} finally {
 			target.value = ''
 		}
-	}
-
-	/** 處理圖片載入錯誤 */
-	function handleImageError(event: Event) {
-		const imgElement = event.currentTarget as HTMLImageElement
-		imgElement.src = '/favicon.png'
 	}
 </script>
 
@@ -103,8 +86,7 @@
 		<input
 			type="text"
 			value={settings.characterName}
-			oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
-				onSettingsChange('characterName', e.currentTarget.value)}
+			oninput={(e) => onSettingsChange('characterName', e.currentTarget.value)}
 			placeholder="例如：艾爾文、Nova-7、夏洛克..."
 		/>
 	</label>
@@ -115,8 +97,7 @@
 		<input
 			type="text"
 			value={settings.characterRole}
-			oninput={(e: Event & { currentTarget: HTMLInputElement }) =>
-				onSettingsChange('characterRole', e.currentTarget.value)}
+			oninput={(e) => onSettingsChange('characterRole', e.currentTarget.value)}
 			placeholder="例如：魔法師、星際飛船AI、名偵探..."
 		/>
 	</label>
@@ -126,8 +107,7 @@
 		場景描述：
 		<textarea
 			value={settings.sceneDescription}
-			oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) =>
-				onSettingsChange('sceneDescription', e.currentTarget.value)}
+			oninput={(e) => onSettingsChange('sceneDescription', e.currentTarget.value)}
 			placeholder="在哪裡？什麼樣的環境？例如：中世紀城堡、未來太空站..."
 		></textarea>
 	</label>
@@ -137,8 +117,7 @@
 		情境描述：
 		<textarea
 			value={settings.scenarioDescription}
-			oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) =>
-				onSettingsChange('scenarioDescription', e.currentTarget.value)}
+			oninput={(e) => onSettingsChange('scenarioDescription', e.currentTarget.value)}
 			placeholder="正在發生什麼事？例如：探索遺跡、解決太空船故障..."
 		></textarea>
 	</label>
@@ -148,8 +127,7 @@
 		額外系統指令：
 		<textarea
 			value={settings.systemPrompt}
-			oninput={(e: Event & { currentTarget: HTMLTextAreaElement }) =>
-				onSettingsChange('systemPrompt', e.currentTarget.value)}
+			oninput={(e) => onSettingsChange('systemPrompt', e.currentTarget.value)}
 			placeholder="其他想對AI說的指示，例如：使用特定的語氣或風格回應..."
 		></textarea>
 	</label>

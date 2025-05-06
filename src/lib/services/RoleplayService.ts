@@ -4,6 +4,9 @@
  */
 
 import type { RoleplaySettings, ChatMessage } from '../types'
+import { loadFromStorage, saveToStorage } from '../utils/storageUtils'
+import { generateRoleplaySystemPrompt, generateWelcomeMessage } from '../utils/promptUtils'
+import { deepClone } from '../utils/jsonUtils'
 
 /** 角色扮演設定在 localStorage 中的鍵名 */
 export const ROLEPLAY_SETTINGS_KEY = 'roleplay_settings'
@@ -57,7 +60,7 @@ export class RoleplayService {
 	/** 當前角色扮演設定對象 */
 	private settings: RoleplaySettings
 	/** 所有角色扮演模板 (名稱 -> 設定) */
-	private templates: Record<string, RoleplayTemplate> // 使用新的模板類型
+	private templates: Record<string, RoleplayTemplate>
 
 	/**
 	 * 創建 RoleplayService 實例
@@ -72,117 +75,66 @@ export class RoleplayService {
 			scenarioDescription: '',
 			systemPrompt: '',
 			isRoleplayMode: false,
-			avatarBase64: undefined // 新增：初始化頭像為 undefined
+			avatarBase64: undefined
 		}
-		this.templates = {} // 初始化為空物件
+		this.templates = {}
 
 		this.loadSettings()
-		this.loadTemplates() // 載入模板
+		this.loadTemplates()
 	}
 
 	/**
 	 * 從 localStorage 載入角色扮演設定
-	 * @returns {RoleplaySettings} 載入的角色扮演設定
 	 */
 	loadSettings(): RoleplaySettings {
-		const storedSettings = localStorage.getItem(ROLEPLAY_SETTINGS_KEY)
-
-		if (storedSettings) {
-			try {
-				const parsedSettings = JSON.parse(storedSettings)
-				// 合併載入的設定和預設值，確保所有欄位都存在
-				this.settings = {
-					...this.settings, // 先放入預設值
-					...parsedSettings // 用載入的值覆蓋
-				}
-			} catch (e) {
-				console.error('無法解析儲存的角色扮演設定:', e)
-				// 如果解析失敗，保留預設值
-			}
+		const savedSettings = loadFromStorage(ROLEPLAY_SETTINGS_KEY, this.settings)
+		this.settings = {
+			...this.settings,
+			...savedSettings
 		}
-		return this.settings
+		return deepClone(this.settings)
 	}
 
 	/**
 	 * 儲存角色扮演設定到 localStorage
-	 * @param {RoleplaySettings} settings - 要保存的角色扮演設定
 	 */
 	saveSettings(settings: RoleplaySettings) {
 		this.settings = settings
-		localStorage.setItem(ROLEPLAY_SETTINGS_KEY, JSON.stringify(settings))
+		saveToStorage(ROLEPLAY_SETTINGS_KEY, settings)
 	}
 
 	/**
-	 * 獲取當前角色扮演設定的副本
-	 * @returns {RoleplaySettings} 當前角色扮演設定的副本
-	 */
-	getSettings(): RoleplaySettings {
-		// 返回一個深拷貝以防止外部修改內部狀態
-		return JSON.parse(JSON.stringify(this.settings))
-	}
-
-	// --- 模板管理 ---
-
-	/**
-	 * 從 localStorage 載入模板，如果不存在則初始化預設模板
+	 * 從 localStorage 載入模板
 	 */
 	private loadTemplates() {
-		const storedTemplates = localStorage.getItem(ROLEPLAY_TEMPLATES_KEY)
-		if (storedTemplates) {
-			try {
-				this.templates = JSON.parse(storedTemplates)
-				// 可選：檢查載入的模板結構是否有效
-			} catch (e) {
-				console.error('無法解析儲存的角色扮演模板，將使用預設模板:', e)
-				this.initializeDefaultTemplates()
-			}
-		} else {
-			// 如果 localStorage 中沒有模板，則初始化預設模板
-			this.initializeDefaultTemplates()
-		}
-	}
-
-	/**
-	 * 初始化預設模板並儲存
-	 */
-	private initializeDefaultTemplates() {
-		this.templates = { ...DEFAULT_TEMPLATES }
-		this.saveTemplates()
+		this.templates = loadFromStorage(ROLEPLAY_TEMPLATES_KEY, DEFAULT_TEMPLATES)
 	}
 
 	/**
 	 * 儲存當前模板列表到 localStorage
 	 */
 	private saveTemplates() {
-		localStorage.setItem(ROLEPLAY_TEMPLATES_KEY, JSON.stringify(this.templates))
+		saveToStorage(ROLEPLAY_TEMPLATES_KEY, this.templates)
 	}
 
 	/**
 	 * 獲取所有模板名稱列表
-	 * @returns {string[]} 模板名稱陣列
 	 */
 	getTemplateNames(): string[] {
-		return Object.keys(this.templates).sort() // 返回排序後的名稱
+		return Object.keys(this.templates).sort()
 	}
 
 	/**
 	 * 根據名稱獲取模板設定
-	 * @param {string} name - 模板名稱
-	 * @returns {RoleplayTemplate | undefined} 模板設定或 undefined
 	 */
 	getTemplate(name: string): RoleplayTemplate | undefined {
-		// 返回包含頭像的完整模板
-		return this.templates[name] ? { ...this.templates[name] } : undefined
+		return this.templates[name] ? deepClone(this.templates[name]) : undefined
 	}
 
 	/**
-	 * 將指定設定儲存為新模板或覆蓋現有模板
-	 * @param {string} name - 模板名稱
-	 * @param {RoleplayTemplate} templateSettings - 要儲存的模板設定 (包含頭像)
-	 * @returns {boolean} 是否成功儲存
+	 * 將指定設定儲存為新模板
 	 */
 	saveTemplate(name: string, templateSettings: RoleplayTemplate): boolean {
-		// 接收包含頭像的模板
 		if (!name || !name.trim()) {
 			console.error('模板名稱不能為空')
 			return false
@@ -194,8 +146,6 @@ export class RoleplayService {
 
 	/**
 	 * 刪除指定名稱的模板
-	 * @param {string} name - 要刪除的模板名稱
-	 * @returns {boolean} 是否成功刪除
 	 */
 	deleteTemplate(name: string): boolean {
 		if (this.templates[name]) {
@@ -203,84 +153,36 @@ export class RoleplayService {
 			this.saveTemplates()
 			return true
 		}
-		return false // 模板不存在
+		return false
 	}
 
 	/**
 	 * 套用指定名稱的角色扮演模板到當前設定
-	 * @param {string} templateName - 模板名稱
-	 * @returns {RoleplaySettings | null} 套用模板後的角色扮演設定，如果模板不存在則返回 null
 	 */
 	applyTemplate(templateName: string): RoleplaySettings | null {
-		const template = this.getTemplate(templateName) // 獲取包含頭像的模板
+		const template = this.getTemplate(templateName)
 		if (template) {
-			// 合併模板設定到當前設定，保留 isRoleplayMode
-			// 模板中的 avatarBase64 會直接覆蓋當前的
 			this.settings = {
-				...this.settings, // 保留 isRoleplayMode
-				...template // 用模板覆蓋相關欄位 (包括 avatarBase64)
+				...this.settings,
+				...template
 			}
-			// 注意：這裡不自動保存 settings，讓調用者決定何時保存
-			return this.getSettings() // 返回更新後的設定副本
+			return deepClone(this.settings)
 		}
 		console.warn(`模板 "${templateName}" 不存在。`)
-		return null // 模板不存在
+		return null
 	}
-
-	// --- 提示詞與訊息生成 ---
 
 	/**
 	 * 根據當前角色扮演設定生成系統提示詞
-	 * 將各設定項組合成一個完整的系統提示指令
-	 * @returns {string} 生成的系統提示詞
 	 */
 	generateSystemPrompt(): string {
-		if (!this.settings.isRoleplayMode) return ''
-
-		let prompt = '你是一個角色扮演的AI助手。'
-
-		if (this.settings.characterName) {
-			prompt += `\n你的名字是「${this.settings.characterName}」。`
-		}
-
-		if (this.settings.characterRole) {
-			prompt += `\n你的角色是「${this.settings.characterRole}」。`
-		}
-
-		if (this.settings.sceneDescription) {
-			prompt += `\n當前場景：${this.settings.sceneDescription}`
-		}
-
-		if (this.settings.scenarioDescription) {
-			prompt += `\n當前情境：${this.settings.scenarioDescription}`
-		}
-
-		if (this.settings.systemPrompt) {
-			prompt += `\n\n額外指令：${this.settings.systemPrompt}`
-		}
-
-		prompt +=
-			'\n\n請始終保持這個角色，不要打破第四面牆。不要提及你是AI或語言模型，完全沉浸在角色中回應用戶。'
-
-		return prompt
+		return generateRoleplaySystemPrompt(this.settings)
 	}
 
 	/**
 	 * 生成角色扮演的歡迎訊息
-	 * 當開始角色扮演時顯示角色已進入對話的提示
-	 * @returns {ChatMessage | null} 歡迎訊息，若非角色扮演模式則返回 null
 	 */
 	generateWelcomeMessage(): ChatMessage | null {
-		if (!this.settings.isRoleplayMode) return null
-
-		if (this.settings.characterName || this.settings.characterRole) {
-			const welcomeMsg = `*${this.settings.characterName || 'AI'}${
-				this.settings.characterRole ? `（${this.settings.characterRole}）` : ''
-			}已進入對話。*`
-
-			return { role: 'ai', content: welcomeMsg }
-		}
-
-		return null
+		return generateWelcomeMessage(this.settings)
 	}
 }

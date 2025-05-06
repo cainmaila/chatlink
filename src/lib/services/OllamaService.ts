@@ -6,6 +6,7 @@
 import { ChatOllama } from '@langchain/ollama'
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages'
 import type { ChatMessage, OllamaModel } from '../types'
+import { loadFromStorage, saveToStorage } from '../utils/storageUtils'
 
 /** 存儲選定模型的 localStorage 鍵名 */
 export const MODEL_STORAGE_KEY = 'ollama_selected_model'
@@ -26,9 +27,6 @@ export class OllamaService {
 
 	/**
 	 * 創建 OllamaService 實例
-	 * @param {string} baseUrl - Ollama API 的基礎 URL
-	 * @param {string} model - 默認使用的模型名稱
-	 * @param {number} temperature - 生成回應的溫度參數
 	 */
 	constructor(
 		baseUrl: string = 'http://localhost:11434',
@@ -38,11 +36,11 @@ export class OllamaService {
 		this.baseUrl = baseUrl
 		this.model = model
 		this.temperature = temperature
+		this.loadSettings()
 	}
 
 	/**
 	 * 創建 LangChain 的 ChatOllama 實例
-	 * @returns {ChatOllama} 配置好的 ChatOllama 實例
 	 */
 	createLLM() {
 		return new ChatOllama({
@@ -54,7 +52,6 @@ export class OllamaService {
 
 	/**
 	 * 從 Ollama API 獲取可用模型列表
-	 * @returns {Promise<{models: OllamaModel[], error: string | null}>} 可用模型列表和可能的錯誤
 	 */
 	async fetchModels(): Promise<{ models: OllamaModel[]; error: string | null }> {
 		try {
@@ -80,8 +77,6 @@ export class OllamaService {
 
 	/**
 	 * 將聊天訊息轉換為 LangChain 消息格式
-	 * @param {ChatMessage[]} messages - 應用程序內部的聊天消息格式
-	 * @returns {(HumanMessage | AIMessage | SystemMessage)[]} LangChain 格式的消息數組
 	 */
 	convertMessages(messages: ChatMessage[]) {
 		return messages.map((msg) => {
@@ -99,38 +94,29 @@ export class OllamaService {
 
 	/**
 	 * 設置 Ollama API 的基礎 URL
-	 * @param {string} url - 新的基礎 URL
 	 */
 	setBaseUrl(url: string) {
 		this.baseUrl = url
-		localStorage.setItem(URL_STORAGE_KEY, url)
+		saveToStorage(URL_STORAGE_KEY, url)
 	}
 
 	/**
 	 * 設置使用的模型
-	 * @param {string} model - 模型名稱
 	 */
 	setModel(model: string) {
 		this.model = model
-		localStorage.setItem(MODEL_STORAGE_KEY, model)
+		saveToStorage(MODEL_STORAGE_KEY, model)
 	}
 
 	/**
 	 * 從 localStorage 載入設定
-	 * @returns {{baseUrl: string, model: string}} 載入的設定
 	 */
 	loadSettings() {
-		const storedModel = localStorage.getItem(MODEL_STORAGE_KEY)
-		const storedUrl = localStorage.getItem(URL_STORAGE_KEY)
+		const storedModel = loadFromStorage(MODEL_STORAGE_KEY, this.model)
+		const storedUrl = loadFromStorage(URL_STORAGE_KEY, this.baseUrl)
 
-		if (storedModel) {
-			this.model = storedModel
-		}
-		if (storedUrl) {
-			this.baseUrl = storedUrl
-		} else {
-			localStorage.setItem(URL_STORAGE_KEY, this.baseUrl)
-		}
+		this.model = storedModel
+		this.baseUrl = storedUrl
 
 		return {
 			baseUrl: this.baseUrl,
