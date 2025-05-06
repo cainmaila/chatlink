@@ -82,7 +82,7 @@
 
 		roleplaySettings = newSettings // 直接更新父元件的狀態
 		// 任何通過 UI 進行的設定變更都應立即保存
-		roleplayService.saveSettings(roleplaySettings);
+		roleplayService.saveSettings(roleplaySettings)
 	}
 
 	/**
