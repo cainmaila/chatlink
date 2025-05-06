@@ -1,50 +1,72 @@
 <!--
 @component
 @name TemplateSelector
-@description 角色扮演模板選擇器組件，提供模板的選擇、套用和刪除功能
+@description 角色扮演模板選擇器組件，提供模板的選擇、預覽和刪除功能
 -->
 <script lang="ts">
 	const {
 		templateNames = [],
-		onApplyTemplate,
+		currentTemplate = '', // 新增：當前使用中的模板
+		onPreviewTemplate, // 新增：預覽模板的回調
+		onConfirmTemplate, // 新增：確認套用模板的回調
 		onDeleteTemplate
 	} = $props<{
 		templateNames: string[]
-		onApplyTemplate: (templateName: string) => void
+		currentTemplate: string
+		onPreviewTemplate: (templateName: string) => void
+		onConfirmTemplate: (templateName: string) => void
 		onDeleteTemplate: (templateName: string) => void
 	}>()
 
-	let selectedTemplate = $state('')
-	let confirmOpen = $derived(!!selectedTemplate)
-	let canApplyTemplate = $derived(selectedTemplate !== '')
+	let selectedTemplate = $state(currentTemplate)
+	let hasChanges = $derived(selectedTemplate !== currentTemplate)
+	let canConfirm = $derived(hasChanges && selectedTemplate !== '')
+	let canDelete = $derived(!!selectedTemplate)
+
+	/** 處理模板選擇變更 */
+	function handleTemplateChange(templateName: string) {
+		selectedTemplate = templateName
+		onPreviewTemplate(templateName)
+	}
+
+	/** 處理確認套用模板 */
+	function handleConfirmTemplate() {
+		if (canConfirm) {
+			onConfirmTemplate(selectedTemplate)
+		}
+	}
 
 	/** 處理刪除模板 */
 	function handleDeleteTemplate() {
 		if (!selectedTemplate) return
 		if (confirm(`確定要刪除模板 "${selectedTemplate}" 嗎？此操作無法復原。`)) {
 			onDeleteTemplate(selectedTemplate)
-			selectedTemplate = ''
-		}
-	}
-
-	/** 處理套用模板 */
-	function handleApplyTemplate() {
-		if (selectedTemplate) {
-			onApplyTemplate(selectedTemplate)
+			if (selectedTemplate === currentTemplate) {
+				selectedTemplate = ''
+				onPreviewTemplate('')
+			}
 		}
 	}
 </script>
 
 <div class="template-management">
-	<label for="template-select">選擇模板：</label>
-	<select id="template-select" bind:value={selectedTemplate}>
+	<label for="template-select">角色模板：</label>
+	<select
+		id="template-select"
+		value={selectedTemplate}
+		onchange={(e) => handleTemplateChange((e.target as HTMLSelectElement).value)}
+	>
 		<option value="">-- 請選擇模板 --</option>
 		{#each templateNames as name}
-			<option value={name}>{name}</option>
+			<option value={name} selected={name === currentTemplate}>{name}</option>
 		{/each}
 	</select>
-	<button onclick={handleApplyTemplate} disabled={!canApplyTemplate}> 套用選定模板 </button>
-	<button class="delete-button" onclick={handleDeleteTemplate} disabled={!confirmOpen}>
+
+	{#if canConfirm}
+		<button class="confirm-button" onclick={handleConfirmTemplate}> 確認套用此角色 </button>
+	{/if}
+
+	<button class="delete-button" onclick={handleDeleteTemplate} disabled={!canDelete}>
 		刪除選定模板
 	</button>
 </div>
@@ -88,6 +110,14 @@
 			&:disabled {
 				opacity: 0.6;
 				cursor: not-allowed;
+			}
+		}
+
+		& .confirm-button {
+			background-color: var(--primary-color);
+			color: white;
+			&:hover:not(:disabled) {
+				background-color: var(--primary-hover-color);
 			}
 		}
 

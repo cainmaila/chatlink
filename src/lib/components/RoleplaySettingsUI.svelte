@@ -1,29 +1,18 @@
 <!--
 @component
-@name RoleplaySettings
-@description 角色扮演設定元件，提供角色扮演相關參數配置和模板選擇
-@example
-  ```svelte
-  <RoleplaySettings
-    settings={roleplaySettings}
-    isModelValid={true}
-    onStartRoleplay={startRoleplay}
-    onCloseRoleplay={closeRoleplay}
-    onApplyTemplate={applyTemplate}
-    onSettingsChange={handleSettingsChange}
-    systemPrompt="你是一個專業的角色扮演AI..."
-  />
-  ```
+@name RoleplaySettingsUI
+@description 角色扮演設定面板，包含模板選擇和設定表單
 -->
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
-	import { RoleplayService } from '$lib/services/RoleplayService'
+	import type { RoleplayService, RoleplayTemplate } from '$lib/services/RoleplayService'
+	import { deepClone } from '$lib/utils/jsonUtils'
 	import TemplateSelector from './TemplateSelector.svelte'
 	import RoleplaySettingsForm from './RoleplaySettingsForm.svelte'
 
 	const {
 		settings,
-		isModelValid = true,
+		isModelValid = false,
 		roleplayService,
 		onStartRoleplay,
 		onCloseRoleplay,
@@ -45,78 +34,105 @@
 		systemPrompt?: string
 	}>()
 
-	// --- 本地元件狀態 ---
-	// 只保留必要的狀態
-	let templateNames = $derived(roleplayService.getTemplateNames()) // 改為 derived
-	let selectedTemplate = $state('')
+	// --- 本地狀態 ---
+	let templateNames = $derived(roleplayService.getTemplateNames())
 	let newTemplateName = $state('')
 	let isGeneratingAI = $state(false)
 	let isUploadingImage = $state(false)
-	let localSettings = $state<RoleplaySettings>(JSON.parse(JSON.stringify(settings)))
 
-	// --- 效果：當外部 settings 變化時，同步本地狀態 (除非正在預覽模板) ---
-	$effect(() => {
-		if (!selectedTemplate) {
-			localSettings = JSON.parse(JSON.stringify(settings))
-		}
-	})
+	// 新增：預覽相關狀態
+	let currentTemplateName = $state(findCurrentTemplateName())
+	let previewSettings = $state<RoleplaySettings>(deepClone(settings))
 
-	// --- 效果：當選擇的模板變化時，更新本地狀態以預覽 ---
-	$effect(() => {
-		const newSettings = selectedTemplate
-			? roleplayService.getTemplate(selectedTemplate)
-			: JSON.parse(JSON.stringify(settings))
-
-		if (newSettings) {
-			localSettings = {
-				...localSettings,
-				...(selectedTemplate ? newSettings : {}),
-				isRoleplayMode: localSettings.isRoleplayMode // 保持原有的模式
+	/** 找出當前設定對應的模板名稱 */
+	function findCurrentTemplateName(): string {
+		for (const name of templateNames) {
+			const template = roleplayService.getTemplate(name)
+			if (template && isSettingsMatchTemplate(settings, template)) {
+				return name
 			}
-			onSettingsChange(localSettings)
 		}
-	})
-
-	/** 處理設定值更新 */
-	function updateLocalSetting(key: keyof RoleplaySettings, value: any) {
-		localSettings = {
-			...localSettings,
-			[key]: value
-		}
-		onSettingsChange(localSettings)
+		return ''
 	}
 
-	/** 處理保存模板 */
-	function handleSaveTemplate() {
-		if (!newTemplateName.trim()) return
-		const { isRoleplayMode, ...templateSettingsWithAvatar } = localSettings
-		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettingsWithAvatar)
-		if (success) {
-			const savedName = newTemplateName.trim()
-			newTemplateName = ''
-			templateNames = roleplayService.getTemplateNames()
-			selectedTemplate = savedName
-			onTemplateListChange()
+	/** 比對設定是否與模板匹配 */
+	function isSettingsMatchTemplate(
+		settings: RoleplaySettings,
+		template: RoleplayTemplate
+	): boolean {
+		return (
+			settings.characterName === template.characterName &&
+			settings.characterRole === template.characterRole &&
+			settings.sceneDescription === template.sceneDescription &&
+			settings.scenarioDescription === template.scenarioDescription &&
+			settings.systemPrompt === template.systemPrompt &&
+			settings.avatarBase64 === template.avatarBase64
+		)
+	}
+
+	/** 處理模板預覽 */
+	function handlePreviewTemplate(templateName: string) {
+		if (templateName) {
+			const template = roleplayService.getTemplate(templateName)
+			if (template) {
+				previewSettings = {
+					...settings,
+					...template
+				}
+			}
 		} else {
-			console.error(`無法保存模板 "${newTemplateName.trim()}"。`)
+			previewSettings = deepClone(settings)
 		}
+	}
+
+	/** 處理確認套用模板 */
+	function handleConfirmTemplate(templateName: string) {
+		currentTemplateName = templateName
+		onApplyTemplate(templateName)
 	}
 
 	/** 處理刪除模板 */
-	function handleDeleteTemplate(templateToDelete: string) {
-		const success = roleplayService.deleteTemplate(templateToDelete)
+	function handleDeleteTemplate(templateName: string) {
+		const success = roleplayService.deleteTemplate(templateName)
 		if (success) {
-			templateNames = roleplayService.getTemplateNames()
-			if (selectedTemplate === templateToDelete) {
-				selectedTemplate = ''
+			if (templateName === currentTemplateName) {
+				currentTemplateName = ''
 			}
 			onTemplateListChange()
 		} else {
-			console.error(`無法刪除模板 "${templateToDelete}"。`)
+			console.error(`無法刪除模板 "${templateName}"。`)
 		}
 	}
 
-	/** 處理 AI 生成模板請求 */
+	/** 更新預覽設定 */
+	function updatePreviewSetting(key: keyof RoleplaySettings, value: any) {
+		previewSettings = {
+			...previewSettings,
+			[key]: value
+		}
+	}
+
+	/** 處理儲存為新模板 */
+	function handleSaveTemplate() {
+		if (!newTemplateName.trim()) return
+
+		const templateSettings: RoleplayTemplate = {
+			characterName: previewSettings.characterName,
+			characterRole: previewSettings.characterRole,
+			sceneDescription: previewSettings.sceneDescription,
+			scenarioDescription: previewSettings.scenarioDescription,
+			systemPrompt: previewSettings.systemPrompt,
+			avatarBase64: previewSettings.avatarBase64
+		}
+
+		const success = roleplayService.saveTemplate(newTemplateName.trim(), templateSettings)
+		if (success) {
+			newTemplateName = ''
+			onTemplateListChange()
+		}
+	}
+
+	/** 處理 AI 生成模板 */
 	async function handleGenerateTemplateAI() {
 		const description = prompt(
 			'請輸入您想生成的角色基本描述（例如：一個住在未來都市的賽博龐克偵探）：',
@@ -139,7 +155,13 @@
 <div class="roleplay-settings">
 	<h2>角色扮演設定</h2>
 
-	<TemplateSelector {templateNames} {onApplyTemplate} onDeleteTemplate={handleDeleteTemplate} />
+	<TemplateSelector
+		{templateNames}
+		currentTemplate={currentTemplateName}
+		onPreviewTemplate={handlePreviewTemplate}
+		onConfirmTemplate={handleConfirmTemplate}
+		onDeleteTemplate={handleDeleteTemplate}
+	/>
 
 	<div class="template-save">
 		<input type="text" bind:value={newTemplateName} placeholder="輸入新模板名稱..." />
@@ -152,41 +174,36 @@
 	</div>
 
 	<RoleplaySettingsForm
-		settings={localSettings}
+		settings={previewSettings}
 		{isUploadingImage}
-		onSettingsChange={updateLocalSetting}
+		onSettingsChange={updatePreviewSetting}
 	/>
 
 	<div class="preview-section">
 		<h3>系統提示預覽：</h3>
-		<pre class="system-preview">{systemPrompt}</pre>
-	</div>
+		<pre class="system-prompt">{systemPrompt}</pre>
 
-	<div class="roleplay-buttons">
-		<button class="start-button" onclick={onStartRoleplay} disabled={!isModelValid}>
-			{settings.isRoleplayMode ? '重新開始角色扮演' : '開始角色扮演'}
-		</button>
-		<button class="clear-button" onclick={onCloseRoleplay}> 關閉角色扮演 </button>
+		<div class="roleplay-controls">
+			{#if settings.isRoleplayMode}
+				<button class="warning" onclick={onCloseRoleplay}>結束角色扮演</button>
+			{:else}
+				<button class="primary" onclick={onStartRoleplay}>開始角色扮演</button>
+			{/if}
+		</div>
 	</div>
 </div>
 
 <style lang="postcss">
 	.roleplay-settings {
 		background-color: var(--secondary-bg-color);
-		border-bottom: 1px solid var(--border-color);
+		border: 1px solid var(--border-color);
+		border-radius: 8px;
 		padding: 15px;
+		margin-bottom: 15px;
 
 		& h2 {
 			margin-top: 0;
 			margin-bottom: 15px;
-			font-size: 1.2em;
-			color: var(--text-color);
-		}
-
-		& h3 {
-			margin-top: 15px;
-			margin-bottom: 5px;
-			font-size: 1em;
 			color: var(--text-color);
 		}
 	}
@@ -195,90 +212,78 @@
 		display: flex;
 		gap: 10px;
 		margin-bottom: 15px;
-		align-items: center;
 		flex-wrap: wrap;
 
-		& input[type='text'] {
+		& input {
+			flex: 1;
+			min-width: 200px;
 			padding: 6px;
 			border: 1px solid var(--border-color);
 			border-radius: 4px;
 			background-color: var(--input-bg);
 			color: var(--text-color);
-			flex-grow: 1;
-			min-width: 150px;
-		}
-
-		& button {
-			padding: 6px 12px;
-			background-color: var(--message-user-bg);
-			color: var(--text-color);
-			border: 1px solid var(--border-color);
-			border-radius: 4px;
-			cursor: pointer;
-			transition: background-color 0.2s;
-			white-space: nowrap;
-
-			&:hover:not(:disabled) {
-				background-color: var(--primary-color);
-				color: white;
-			}
-			&:disabled {
-				opacity: 0.6;
-				cursor: not-allowed;
-			}
 		}
 	}
 
 	.preview-section {
-		margin-top: 15px;
+		margin-top: 20px;
+		padding: 15px;
+		background-color: var(--background-color);
+		border: 1px solid var(--border-color);
+		border-radius: 4px;
 
-		& .system-preview {
-			padding: 10px;
-			background-color: rgba(0, 0, 0, 0.05);
-			border-radius: 4px;
-			font-family: monospace;
-			font-size: 0.85em;
-			white-space: pre-wrap;
-			max-height: 150px;
-			overflow-y: auto;
+		& h3 {
+			margin-top: 0;
+			margin-bottom: 10px;
 			color: var(--text-color);
+		}
+
+		& .system-prompt {
+			white-space: pre-wrap;
+			background-color: var(--secondary-bg-color);
+			padding: 10px;
+			border-radius: 4px;
+			color: var(--text-color);
+			font-family: monospace;
+			margin: 0;
 		}
 	}
 
-	.roleplay-buttons {
+	.roleplay-controls {
 		display: flex;
 		justify-content: center;
-		gap: 15px;
 		margin-top: 15px;
+		gap: 10px;
 
-		& .start-button {
-			background-color: var(--primary-color);
-			color: white;
+		& button {
 			padding: 8px 16px;
 			border: none;
 			border-radius: 4px;
 			cursor: pointer;
+			font-weight: 500;
+			transition: background-color 0.2s;
 
-			&:hover:not(:disabled) {
-				background-color: var(--primary-hover-color);
+			&.primary {
+				background-color: var(--primary-color);
+				color: white;
+
+				&:hover:not(:disabled) {
+					background-color: var(--primary-hover-color);
+				}
+			}
+
+			&.warning {
+				background-color: var(--warning-color);
+				color: white;
+
+				&:hover:not(:disabled) {
+					background-color: var(--warning-hover-color);
+				}
 			}
 
 			&:disabled {
 				opacity: 0.6;
 				cursor: not-allowed;
-			}
-		}
-
-		& .clear-button {
-			background-color: var(--error-color);
-			color: white;
-			padding: 8px 16px;
-			border: none;
-			border-radius: 4px;
-			cursor: pointer;
-
-			&:hover {
-				opacity: 0.9;
 			}
 		}
 	}
