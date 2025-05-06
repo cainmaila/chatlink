@@ -46,7 +46,8 @@
 	}>()
 
 	// --- 本地元件狀態 ---
-	let templateNames = $state(roleplayService.getTemplateNames())
+	// 只保留必要的狀態
+	let templateNames = $derived(roleplayService.getTemplateNames()) // 改為 derived
 	let selectedTemplate = $state('')
 	let newTemplateName = $state('')
 	let isGeneratingAI = $state(false)
@@ -60,25 +61,20 @@
 		}
 	})
 
-	// --- 效果：當選擇的模板變化時，更新本地狀態以預覽，並通知父元件 ---
+	// --- 效果：當選擇的模板變化時，更新本地狀態以預覽 ---
 	$effect(() => {
-		if (selectedTemplate) {
-			const templateData = roleplayService.getTemplate(selectedTemplate)
-			if (templateData) {
-				localSettings = {
-					...localSettings,
-					characterName: templateData.characterName,
-					characterRole: templateData.characterRole,
-					sceneDescription: templateData.sceneDescription,
-					scenarioDescription: templateData.scenarioDescription,
-					systemPrompt: templateData.systemPrompt,
-					avatarBase64: templateData.avatarBase64
-				}
+		const newSettings = selectedTemplate
+			? roleplayService.getTemplate(selectedTemplate)
+			: JSON.parse(JSON.stringify(settings))
+
+		if (newSettings) {
+			localSettings = {
+				...localSettings,
+				...(selectedTemplate ? newSettings : {}),
+				isRoleplayMode: localSettings.isRoleplayMode // 保持原有的模式
 			}
-		} else {
-			localSettings = JSON.parse(JSON.stringify(settings))
+			onSettingsChange(localSettings)
 		}
-		onSettingsChange(localSettings)
 	})
 
 	/** 處理設定值更新 */

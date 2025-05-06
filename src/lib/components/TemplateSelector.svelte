@@ -2,22 +2,8 @@
 @component
 @name TemplateSelector
 @description 角色扮演模板選擇器組件，提供模板的選擇、套用和刪除功能
-@example
-```svelte
-<TemplateSelector
-  templateNames={['模板1', '模板2']}
-  onApplyTemplate={(templateName) => console.log(`套用模板: ${templateName}`)}
-  onDeleteTemplate={(templateName) => console.log(`刪除模板: ${templateName}`)}
-/>
-```
 -->
 <script lang="ts">
-	/**
-	 * 元件屬性
-	 * @prop {string[]} templateNames - 可用的模板名稱列表
-	 * @prop {(templateName: string) => void} onApplyTemplate - 套用模板時的回調函數
-	 * @prop {(templateName: string) => void} onDeleteTemplate - 刪除模板時的回調函數
-	 */
 	const {
 		templateNames = [],
 		onApplyTemplate,
@@ -29,13 +15,22 @@
 	}>()
 
 	let selectedTemplate = $state('')
+	let confirmOpen = $derived(!!selectedTemplate)
+	let canApplyTemplate = $derived(selectedTemplate !== '')
 
 	/** 處理刪除模板 */
 	function handleDeleteTemplate() {
 		if (!selectedTemplate) return
 		if (confirm(`確定要刪除模板 "${selectedTemplate}" 嗎？此操作無法復原。`)) {
 			onDeleteTemplate(selectedTemplate)
-			selectedTemplate = '' // 清空選擇
+			selectedTemplate = ''
+		}
+	}
+
+	/** 處理套用模板 */
+	function handleApplyTemplate() {
+		if (selectedTemplate) {
+			onApplyTemplate(selectedTemplate)
 		}
 	}
 </script>
@@ -48,13 +43,8 @@
 			<option value={name}>{name}</option>
 		{/each}
 	</select>
-	<button
-		onclick={() => selectedTemplate && onApplyTemplate(selectedTemplate)}
-		disabled={!selectedTemplate}
-	>
-		套用選定模板
-	</button>
-	<button class="delete-button" onclick={handleDeleteTemplate} disabled={!selectedTemplate}>
+	<button onclick={handleApplyTemplate} disabled={!canApplyTemplate}> 套用選定模板 </button>
+	<button class="delete-button" onclick={handleDeleteTemplate} disabled={!confirmOpen}>
 		刪除選定模板
 	</button>
 </div>

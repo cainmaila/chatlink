@@ -2,25 +2,11 @@
 @component
 @name RoleplaySettingsForm
 @description 角色扮演設定表單組件，包含了角色名稱、身份、場景描述等設定欄位
-@example
-```svelte
-<RoleplaySettingsForm
-  settings={localSettings}
-  isUploadingImage={false}
-  onSettingsChange={(key, value) => console.log(`${key} changed to:`, value)}
-/>
-```
 -->
 <script lang="ts">
 	import type { RoleplaySettings } from '$lib/types'
 	import imageCompression from 'browser-image-compression'
 
-	/**
-	 * 組件屬性
-	 * @prop {RoleplaySettings} settings - 當前的設定值
-	 * @prop {boolean} [isUploadingImage=false] - 是否正在上傳圖片
-	 * @prop {function} onSettingsChange - 設定變更時的回調函數
-	 */
 	const {
 		settings,
 		isUploadingImage = false,
@@ -31,7 +17,9 @@
 		onSettingsChange: (key: keyof RoleplaySettings, value: any) => void
 	}>()
 
+	// 使用 $derived 替代原本的狀態
 	let displayedAvatarSrc = $derived(settings.avatarBase64)
+	let hasAvatar = $derived(!!settings.avatarBase64)
 
 	/** 處理圖片上傳 */
 	async function handleImageUpload(event: Event) {
@@ -95,7 +83,7 @@
 			>
 				{isUploadingImage ? '上傳中...' : '選擇圖片'}
 			</button>
-			{#if settings.avatarBase64}
+			{#if hasAvatar}
 				<button
 					class="remove-button"
 					onclick={() => onSettingsChange('avatarBase64', undefined)}
