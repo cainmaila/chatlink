@@ -85,12 +85,7 @@
 		<div class="message ai loading">
 			<!-- 在載入中也顯示頭像 -->
 			{#if isRoleplayMode && avatarBase64}
-				<img
-					src={avatarBase64}
-					alt="AI Avatar"
-					class="avatar"
-					onerror={handleImageError}
-				/>
+				<img src={avatarBase64} alt="AI Avatar" class="avatar" onerror={handleImageError} />
 			{/if}
 			<div class="content">
 				<strong>{isRoleplayMode ? characterName || 'AI' : 'AI'}:</strong>
